@@ -1,7 +1,7 @@
 use conv::prelude::*;
 
 mod fit;
-use fit::fit_straight_line;
+use fit::straight_line::fit_straight_line;
 
 mod float_trait;
 use float_trait::Float;
@@ -753,14 +753,13 @@ where
         let m_weighted_mean = ts.get_m_weighted_mean();
         let m_reduced_chi2 = ts.get_m_reduced_chi2();
         match ts.err2.as_ref() {
-            Some(err2) => {
+            Some(_err2) => {
                 let mean = m_weighted_mean.unwrap();
                 let chi2 = (ts.lenf() - T::one()) * m_reduced_chi2.unwrap();
                 vec![
-                    ts.m.sample
-                        .iter()
-                        .zip(err2.sample.iter())
-                        .map(|(&y, &err2)| T::abs(y - mean) / T::sqrt(err2))
+                    ts.iter_value_sqerror()
+                        .unwrap()
+                        .map(|(y, err2)| T::abs(y - mean) / T::sqrt(err2))
                         .sum::<T>()
                         / T::sqrt(ts.lenf() * chi2),
                 ]

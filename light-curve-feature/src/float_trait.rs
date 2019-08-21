@@ -1,9 +1,11 @@
-use conv::prelude::*;
-use num_traits::{float::Float as NumFloat, float::FloatConst};
 use std::cmp::PartialOrd;
 use std::fmt::Display;
 use std::iter::Sum;
 use std::ops::{AddAssign, DivAssign, MulAssign};
+
+use conv::prelude::*;
+use num_traits::{float::Float as NumFloat, float::FloatConst};
+use serde::{Deserialize, Serialize};
 
 pub trait Float:
     NumFloat
@@ -16,7 +18,12 @@ pub trait Float:
     + AddAssign
     + MulAssign
     + DivAssign
+    + Default
     + Display
+    + Sync
+    + Send
+    + Serialize
+    + for<'de> Deserialize<'de>
 {
     fn half() -> Self;
     fn two() -> Self;

@@ -3,10 +3,7 @@ use conv::prelude::*;
 use crate::float_trait::Float;
 use crate::statistics::Statistics;
 
-pub struct DataSample<'a, T>
-where
-    T: Float,
-{
+pub struct DataSample<'a, T> {
     pub(super) sample: &'a [T],
     sorted: Vec<T>,
     min: Option<T>,
@@ -63,7 +60,7 @@ where
     T: Float,
     [T]: Statistics<T>,
 {
-    fn new(sample: &'a [T]) -> Self {
+    pub fn new(sample: &'a [T]) -> Self {
         assert!(
             sample.len() > 1,
             "DataSample should has at least two points"
@@ -105,13 +102,10 @@ where
     }
 }
 
-pub struct TimeSeries<'a, 'b, 'c, T>
-where
-    T: Float,
-{
+pub struct TimeSeries<'a, T> {
     pub(super) t: DataSample<'a, T>,
-    pub(super) m: DataSample<'b, T>,
-    pub(super) err2: Option<DataSample<'c, T>>,
+    pub(super) m: DataSample<'a, T>,
+    pub(super) err2: Option<DataSample<'a, T>>,
     weight_sum: Option<T>,
     m_weighted_mean: Option<T>,
     m_reduced_chi2: Option<T>,
@@ -134,11 +128,11 @@ macro_rules! time_series_getter {
     };
 }
 
-impl<'a, 'b, 'c, T> TimeSeries<'a, 'b, 'c, T>
+impl<'a, T> TimeSeries<'a, T>
 where
     T: Float,
 {
-    pub fn new(t: &'a [T], m: &'b [T], err2: Option<&'c [T]>) -> Self {
+    pub fn new(t: &'a [T], m: &'a [T], err2: Option<&'a [T]>) -> Self {
         assert_eq!(t.len(), m.len(), "t and m should have the same size");
         Self {
             t: DataSample::new(t),
@@ -161,24 +155,30 @@ where
         self.lenu().value_as::<T>().unwrap()
     }
 
-    pub fn max_by_m(&self) -> (T, T) {
-        self.t
-            .sample
-            .iter()
-            .cloned()
-            .zip(self.m.sample.iter().cloned())
-            .max_by(|(_t_a, m_a), (_t_b, m_b)| m_a.partial_cmp(m_b).unwrap())
-            .unwrap()
+    pub fn iter_time_value(&'a self) -> TimeSeriesIteratorTM<'a, T> {
+        TimeSeriesIteratorTM::new(self)
     }
 
-    /// Get m and err2 pair iterator
-    ///
-    /// Save to use only if err2 is Some, i.e. inside time_series_getter!()
-    fn m_err2_iter(&mut self) -> impl Iterator<Item = (&T, &T)> {
-        self.m
-            .sample
-            .iter()
-            .zip(self.err2.as_ref().unwrap().sample.iter())
+    pub fn iter_time_value_sqerror(&'a self) -> Option<TimeSeriesIteratorTME<'a, T>> {
+        if self.err2.is_some() {
+            Some(TimeSeriesIteratorTME::new(self))
+        } else {
+            None
+        }
+    }
+
+    pub fn iter_value_sqerror(&'a self) -> Option<TimeSeriesIteratorME<'a, T>> {
+        if self.err2.is_some() {
+            Some(TimeSeriesIteratorME::new(self))
+        } else {
+            None
+        }
+    }
+
+    pub fn max_by_m(&self) -> (T, T) {
+        self.iter_time_value()
+            .max_by(|(_t_a, m_a), (_t_b, m_b)| m_a.partial_cmp(m_b).unwrap())
+            .unwrap()
     }
 
     time_series_getter!(weight_sum, get_weight_sum, |ts: &mut TimeSeries<T>| {
@@ -195,7 +195,11 @@ where
         m_weighted_mean,
         get_m_weighted_mean,
         |ts: &mut TimeSeries<T>| {
-            ts.m_err2_iter().map(|(&y, &err2)| y / err2).sum::<T>() / ts.get_weight_sum().unwrap()
+            ts.iter_value_sqerror()
+                .unwrap()
+                .map(|(y, err2)| y / err2)
+                .sum::<T>()
+                / ts.get_weight_sum().unwrap()
         }
     );
 
@@ -203,11 +207,96 @@ where
         T,
     >| {
         let m_weighed_mean = ts.get_m_weighted_mean().unwrap();
-        ts.m_err2_iter()
-            .map(|(&y, &err2)| (y - m_weighed_mean).powi(2) / err2)
+        ts.iter_value_sqerror()
+            .unwrap()
+            .map(|(y, err2)| (y - m_weighed_mean).powi(2) / err2)
             .sum::<T>()
             / (ts.lenf() - T::one())
     });
+}
+
+pub struct TimeSeriesIteratorTM<'a, T: Float> {
+    ts: &'a TimeSeries<'a, T>,
+    position: usize,
+}
+
+impl<'a, T: Float> TimeSeriesIteratorTM<'a, T> {
+    fn new(ts: &'a TimeSeries<'a, T>) -> Self {
+        Self { ts, position: 0 }
+    }
+}
+
+impl<'a, T: Float> Iterator for TimeSeriesIteratorTM<'a, T> {
+    type Item = (T, T);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.position < self.ts.lenu() {
+            self.position += 1;
+            Some((
+                self.ts.t.sample[self.position - 1],
+                self.ts.m.sample[self.position - 1],
+            ))
+        } else {
+            None
+        }
+    }
+}
+
+pub struct TimeSeriesIteratorTME<'a, T: Float> {
+    ts: &'a TimeSeries<'a, T>,
+    position: usize,
+}
+
+impl<'a, T: Float> TimeSeriesIteratorTME<'a, T> {
+    fn new(ts: &'a TimeSeries<'a, T>) -> Self {
+        assert!(ts.err2.is_some());
+        Self { ts, position: 0 }
+    }
+}
+
+impl<'a, T: Float> Iterator for TimeSeriesIteratorTME<'a, T> {
+    type Item = (T, T, T);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.position < self.ts.lenu() {
+            self.position += 1;
+            Some((
+                self.ts.t.sample[self.position - 1],
+                self.ts.m.sample[self.position - 1],
+                self.ts.err2.as_ref().unwrap().sample[self.position - 1],
+            ))
+        } else {
+            None
+        }
+    }
+}
+
+pub struct TimeSeriesIteratorME<'a, T: Float> {
+    ts: &'a TimeSeries<'a, T>,
+    position: usize,
+}
+
+impl<'a, T: Float> TimeSeriesIteratorME<'a, T> {
+    fn new(ts: &'a TimeSeries<'a, T>) -> Self {
+        assert!(ts.err2.is_some());
+        Self { ts, position: 0 }
+    }
+}
+
+impl<'a, T: Float> Iterator for TimeSeriesIteratorME<'a, T> {
+    type Item = (T, T);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.position < self.ts.lenu() {
+            self.position += 1;
+            Some((
+                self.ts.m.sample[self.position - 1],
+                self.ts.err2.as_ref().unwrap().sample[self.position - 1],
+            ))
+        } else {
+            None
+        }
+    }
 }
 
 #[cfg(test)]
