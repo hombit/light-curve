@@ -26,7 +26,7 @@ where
         ),
         dm_grid: Box::new(
             ArrayGrid::new(Array1::linspace(
-                -1.25_f32.value_as::<T>().unwrap(),
+                -(1.25_f32.value_as::<T>().unwrap()),
                 1.25_f32.value_as::<T>().unwrap(),
                 33,
             ))
