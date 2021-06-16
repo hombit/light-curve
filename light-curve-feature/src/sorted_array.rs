@@ -1,32 +1,37 @@
-use crate::error::SortedVecError;
+use crate::error::SortedArrayError;
 use crate::float_trait::Float;
 use conv::prelude::*;
 use itertools::Itertools;
+use ndarray::Array1;
 use std::ops::Deref;
 
 #[derive(Clone, Debug)]
-pub struct SortedVec<T>(pub Vec<T>);
+pub struct SortedArray<T>(pub Array1<T>);
 
 fn is_sorted<T: Float>(x: &[T]) -> bool {
     x.iter().tuple_windows().all(|(&a, &b)| a < b)
 }
 
-impl<T> SortedVec<T>
+impl<T> SortedArray<T>
 where
     T: Float,
 {
-    pub fn new(x: Vec<T>) -> Result<Self, SortedVecError> {
+    pub fn new(sorted_array: Array1<T>) -> Result<Self, SortedArrayError> {
         // Replace with Slice::is_sorted when it stabilizes
         // https://github.com/rust-lang/rust/issues/53485
-        if is_sorted(&x) {
-            Ok(Self(x))
+        if is_sorted(
+            sorted_array
+                .as_slice()
+                .ok_or(SortedArrayError::NonContiguous)?,
+        ) {
+            Ok(Self(sorted_array))
         } else {
-            Err(SortedVecError::Unsorted)
+            Err(SortedArrayError::Unsorted)
         }
     }
 
     pub fn maximum(&self) -> T {
-        *self.last().unwrap()
+        self[self.len() - 1]
     }
 
     pub fn minimum(&self) -> T {
@@ -53,11 +58,11 @@ where
         let h = (self.len() as f32) * q - 0.5;
         let h_floor = h.floor();
         if h_floor < 0.0 {
-            self[0]
+            self.minimum()
         } else {
             let i = h_floor as usize;
             if i >= self.len() - 1 {
-                *self.last().unwrap()
+                self.maximum()
             } else {
                 self[i] + (h - h_floor).value_as::<T>().unwrap() * (self[i + 1] - self[i])
             }
@@ -65,17 +70,17 @@ where
     }
 }
 
-impl<T> From<Vec<T>> for SortedVec<T>
+impl<T> From<Vec<T>> for SortedArray<T>
 where
     T: Float,
 {
     fn from(mut v: Vec<T>) -> Self {
         v[..].sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
-        Self(v)
+        Self(Array1::from_vec(v))
     }
 }
 
-impl<T> From<&[T]> for SortedVec<T>
+impl<T> From<&[T]> for SortedArray<T>
 where
     T: Float,
 {
@@ -84,11 +89,11 @@ where
     }
 }
 
-impl<T> Deref for SortedVec<T> {
+impl<T> Deref for SortedArray<T> {
     type Target = [T];
 
     fn deref(&self) -> &Self::Target {
-        &self.0
+        self.0.as_slice().unwrap()
     }
 }
 
@@ -100,7 +105,7 @@ mod tests {
     #[test]
     fn median_is_ppf_half() {
         for i in 0..10 {
-            let a: SortedVec<f64> = (0..100 + i)
+            let a: SortedArray<f64> = (0..100 + i)
                 .map(|_| rand::random())
                 .collect::<Vec<_>>()
                 .into();
@@ -111,7 +116,7 @@ mod tests {
     #[test]
     fn minimum_is_ppf_zero() {
         for i in 0..10 {
-            let a: SortedVec<f64> = (0..100 + i)
+            let a: SortedArray<f64> = (0..100 + i)
                 .map(|_| rand::random())
                 .collect::<Vec<_>>()
                 .into();
@@ -122,7 +127,7 @@ mod tests {
     #[test]
     fn maximum_is_ppf_unity() {
         for i in 0..10 {
-            let a: SortedVec<f32> = (0..100 + i)
+            let a: SortedArray<f32> = (0..100 + i)
                 .map(|_| rand::random())
                 .collect::<Vec<_>>()
                 .into();

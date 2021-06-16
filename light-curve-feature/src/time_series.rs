@@ -1,5 +1,5 @@
 use crate::float_trait::Float;
-use crate::sorted_vec::SortedVec;
+use crate::sorted_array::SortedArray;
 use crate::statistics::Statistics;
 
 use conv::prelude::*;
@@ -12,7 +12,7 @@ where
     T: Float,
 {
     pub sample: &'a [T],
-    sorted: Option<SortedVec<T>>,
+    sorted: Option<SortedArray<T>>,
     min: Option<T>,
     max: Option<T>,
     mean: Option<T>,
@@ -78,7 +78,7 @@ where
         }
     }
 
-    pub fn get_sorted(&mut self) -> &SortedVec<T> {
+    pub fn get_sorted(&mut self) -> &SortedArray<T> {
         if self.sorted.is_none() {
             self.sorted = Some(self.sample.into());
         }

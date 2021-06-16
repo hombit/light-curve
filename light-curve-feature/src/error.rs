@@ -11,7 +11,9 @@ pub enum EvaluatorError {
 }
 
 #[derive(Debug, thiserror::Error, PartialEq)]
-pub enum SortedVecError {
-    #[error("SortedVec::new accepts only sorted vectors")]
+pub enum SortedArrayError {
+    #[error("SortedVec constructors accept only sorted arrays")]
     Unsorted,
+    #[error("SortedVec constructors accept only contiguous arrays")]
+    NonContiguous,
 }

@@ -1,5 +1,5 @@
 use crate::float_trait::Float;
-use crate::sorted_vec::SortedVec;
+use crate::sorted_array::SortedArray;
 use conv::{ConvAsUtil, ConvUtil, RoundToNearest};
 use dyn_clonable::*;
 use itertools::Itertools;
@@ -39,7 +39,7 @@ pub struct MedianNyquistFreq;
 
 impl<T: Float> NyquistFreq<T> for MedianNyquistFreq {
     fn nyquist_freq(&self, t: &[T]) -> T {
-        let sorted_dt: SortedVec<_> = diff(t).into();
+        let sorted_dt: SortedArray<_> = diff(t).into();
         let dt = sorted_dt.median();
         T::PI() / dt
     }
@@ -53,7 +53,7 @@ pub struct QuantileNyquistFreq {
 
 impl<T: Float> NyquistFreq<T> for QuantileNyquistFreq {
     fn nyquist_freq(&self, t: &[T]) -> T {
-        let sorted_dt: SortedVec<_> = diff(t).into();
+        let sorted_dt: SortedArray<_> = diff(t).into();
         let dt = sorted_dt.ppf(self.quantile);
         T::PI() / dt
     }
