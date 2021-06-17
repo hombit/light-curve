@@ -1,39 +1,17 @@
 use crate::float_trait::Float;
-use conv::prelude::*;
 
-pub trait Statistics<T>
+pub trait PeakIndices<T>
 where
     T: Float,
 {
-    fn minimum(&self) -> T;
-    fn maximum(&self) -> T;
-    fn mean(&self) -> T;
     fn peak_indices(&self) -> Vec<usize>;
     fn peak_indices_reverse_sorted(&self) -> Vec<usize>;
 }
 
-impl<T> Statistics<T> for [T]
+impl<T> PeakIndices<T> for [T]
 where
     T: Float,
 {
-    fn minimum(&self) -> T {
-        *self
-            .iter()
-            .min_by(|a, b| a.partial_cmp(b).unwrap())
-            .unwrap()
-    }
-
-    fn maximum(&self) -> T {
-        *self
-            .iter()
-            .max_by(|a, b| a.partial_cmp(b).unwrap())
-            .unwrap()
-    }
-
-    fn mean(&self) -> T {
-        self.iter().copied().sum::<T>() / self.len().value_as::<T>().unwrap()
-    }
-
     /// Indices of local maxima, edge points are never included
     fn peak_indices(&self) -> Vec<usize> {
         self.iter()

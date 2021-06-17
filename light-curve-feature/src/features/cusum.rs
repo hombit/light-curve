@@ -1,5 +1,4 @@
 use crate::evaluator::*;
-use crate::statistics::Statistics;
 
 /// Cusum — a range of cumulative sums
 ///
@@ -46,17 +45,14 @@ where
         self.check_ts_length(ts)?;
         let m_std = get_nonzero_m_std(ts)?;
         let m_mean = ts.m.get_mean();
-        let cumsum: Vec<_> =
-            ts.m.sample
-                .iter()
-                .scan(T::zero(), |sum, &y| {
-                    *sum += y - m_mean;
-                    Some(*sum)
-                })
-                .collect();
-        Ok(vec![
-            (cumsum[..].maximum() - cumsum[..].minimum()) / (m_std * ts.lenf()),
-        ])
+        let (_last_cusum, min_cusum, max_cusum) = ts.m.sample.iter().fold(
+            (T::zero(), T::infinity(), -T::infinity()),
+            |(mut cusum, min_cusum, max_cusum), &m| {
+                cusum += m - m_mean;
+                (cusum, T::min(min_cusum, cusum), T::max(max_cusum, cusum))
+            },
+        );
+        Ok(vec![(max_cusum - min_cusum) / (m_std * ts.lenf())])
     }
 
     fn get_info(&self) -> &EvaluatorInfo {

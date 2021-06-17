@@ -1,7 +1,7 @@
 use criterion::{black_box, Criterion};
 
 use light_curve_common::linspace;
-use light_curve_feature::statistics::Statistics;
+use light_curve_feature::peak_indices::PeakIndices;
 
 macro_rules! gen_bench {
     ($c: expr, $name: expr, $method: ident, $x: expr $(,)?) => {

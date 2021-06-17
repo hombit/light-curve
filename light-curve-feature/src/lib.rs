@@ -57,7 +57,7 @@ pub use periodogram::{
 
 pub mod sorted_array;
 
-pub mod statistics;
+pub mod peak_indices;
 
 pub mod time_series;
 pub use time_series::TimeSeries;

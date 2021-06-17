@@ -1,8 +1,8 @@
 use crate::evaluator::*;
 use crate::extractor::FeatureExtractor;
+use crate::peak_indices::PeakIndices;
 use crate::periodogram;
 use crate::periodogram::{AverageNyquistFreq, NyquistFreq, PeriodogramPower, PeriodogramPowerFft};
-use crate::statistics::Statistics;
 use std::iter;
 
 fn number_ending(i: usize) -> &'static str {

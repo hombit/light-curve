@@ -90,8 +90,8 @@ where
 #[allow(clippy::excessive_precision)]
 mod tests {
     use super::*;
+    use crate::peak_indices::PeakIndices;
     use crate::sorted_array::SortedArray;
-    use crate::statistics::Statistics;
     use light_curve_common::{all_close, linspace};
     use rand::prelude::*;
 
