@@ -92,7 +92,7 @@ mod tests {
         let fe = feat_extr!(Eta::default(), EtaE::default());
         let x = linspace(0.0_f64, 1.0, 11);
         let y: Vec<_> = x.iter().map(|&t| 3.0 + t.powi(2)).collect();
-        let mut ts = TimeSeries::new(&x, &y, None);
+        let mut ts = TimeSeries::new_without_weight(&x, &y);
         let values = fe.eval(&mut ts).unwrap();
         all_close(&values[0..1], &values[1..2], 1e-10);
     }
@@ -311,7 +311,7 @@ mod tests {
             17.284000396728516,
             17.257999420166016,
         ];
-        let mut ts = TimeSeries::new(&x[..], &y[..], None);
+        let mut ts = TimeSeries::new_without_weight(&x[..], &y[..]);
         let actual: f32 = fe.eval(&mut ts).unwrap()[0];
         assert!(actual.is_finite());
     }

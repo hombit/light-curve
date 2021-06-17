@@ -89,7 +89,7 @@ mod tests {
                 }
             })
             .collect::<Vec<_>>(),
-        Some(&[1.0; 1000]),
+        [1.0; 1000],
     );
 
     // Slow convergence, use high tol
@@ -102,7 +102,7 @@ mod tests {
             .iter()
             .map(|&x| f64::sin(x))
             .collect::<Vec<_>>(),
-        None,
+        [1.0; 1000],
         1e-3,
     );
 
@@ -112,7 +112,6 @@ mod tests {
         [12_f64.sqrt() / 4.0],
         [1.0; 1000], // isn't used
         linspace(0.0, 1.0, 1000),
-        None,
     );
 
     // It seems that Stetson (1996) formula for this case is wrong by the factor of 2 * sqrt((N-1) / N)
@@ -130,14 +129,13 @@ mod tests {
                 }
             })
             .collect::<Vec<_>>(),
-        None,
     );
 
     #[test]
     fn stetson_k_plateau() {
         let fe = feat_extr!(StetsonK::new());
         let x = [0.0; 10];
-        let mut ts = TimeSeries::new(&x, &x, None);
+        let mut ts = TimeSeries::new_without_weight(&x, &x);
         assert_eq!(fe.eval(&mut ts), Err(EvaluatorError::FlatTimeSeries));
     }
 }

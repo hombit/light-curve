@@ -98,6 +98,12 @@ impl<T> Deref for SortedArray<T> {
     }
 }
 
+impl<T> AsRef<[T]> for SortedArray<T> {
+    fn as_ref(&self) -> &[T] {
+        self
+    }
+}
+
 #[allow(clippy::float_cmp)]
 #[cfg(test)]
 mod tests {

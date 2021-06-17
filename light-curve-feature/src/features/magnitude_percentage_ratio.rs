@@ -144,7 +144,7 @@ mod tests {
     fn magnitude_percentage_ratio_plateau() {
         let fe = feat_extr!(MagnitudePercentageRatio::default());
         let x = [0.0; 10];
-        let mut ts = TimeSeries::new(&x, &x, None);
+        let mut ts = TimeSeries::new_without_weight(&x, &x);
         assert_eq!(fe.eval(&mut ts), Err(EvaluatorError::FlatTimeSeries));
     }
 }

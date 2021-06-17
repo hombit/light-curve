@@ -86,7 +86,7 @@ fn run<T: Float>(
     err: &[T],
 ) -> Result<Vec<T>, EvaluatorError> {
     let w: Vec<_> = err.iter().map(|&e| e.powi(-2)).collect();
-    let mut ts = TimeSeries::new(&x, &y, Some(&w));
+    let mut ts = TimeSeries::new(&x, &y, &w);
     fe.eval(&mut ts)
 }
 

@@ -15,7 +15,7 @@ use crate::evaluator::*;
 /// let fe = feat_extr!(Amplitude::default());
 /// let time = [0.0, 1.0];  // Doesn't depend on time
 /// let magn = [0.0, 2.0];
-/// let mut ts = TimeSeries::new(&time[..], &magn[..], None);
+/// let mut ts = TimeSeries::new_without_weight(&time[..], &magn[..]);
 /// assert_eq!(vec![1.0], fe.eval(&mut ts).unwrap());
 /// ```
 #[derive(Clone, Default, Debug)]

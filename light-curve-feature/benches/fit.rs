@@ -12,7 +12,7 @@ pub fn bench_fit_straight_line(c: &mut Criterion) {
         .iter()
         .map(|_| thread_rng().gen_range(10.0, 100.0))
         .collect();
-    let ts = TimeSeries::new(&x, &y, Some(&w));
+    let ts = TimeSeries::new(&x, &y, &w);
 
     c.bench_function("Straight line fit w/o noise", |b| {
         b.iter(|| fit_straight_line(black_box(&ts), false));

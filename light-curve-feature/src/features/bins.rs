@@ -93,9 +93,9 @@ where
         self
     }
 
-    fn transform_ts(&self, ts: &mut TimeSeries<T>) -> Result<TmwVectors<T>, EvaluatorError> {
+    fn transform_ts(&self, ts: &mut TimeSeries<T>) -> Result<TmwArrays<T>, EvaluatorError> {
         self.check_ts_length(ts)?;
-        let (t, m, w) =
+        let (t, m, w): (Vec<_>, Vec<_>, Vec<_>) =
             ts.t.sample
                 .iter()
                 .copied()
@@ -115,7 +115,11 @@ where
                     (bin_t, bin_m, bin_w)
                 })
                 .unzip3();
-        Ok(TmwVectors { t, m, w: Some(w) })
+        Ok(TmwArrays {
+            t: t.into(),
+            m: m.into(),
+            w: w.into(),
+        })
     }
 
     #[inline]
@@ -164,7 +168,7 @@ mod tests {
         let t = [0.0_f32, 1.0, 1.1, 1.2, 2.0, 2.1, 2.2, 2.3, 2.4, 2.5, 5.0];
         let m = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0];
         let w = [10.0, 5.0, 10.0, 5.0, 10.0, 5.0, 10.0, 5.0, 10.0, 5.0, 10.0];
-        let mut ts = TimeSeries::new(&t, &m, Some(&w));
+        let mut ts = TimeSeries::new(&t, &m, &w);
 
         let desired_t = [0.5, 1.5, 2.5, 5.5];
         let desired_m = [0.0, 2.0, 6.333333333333333, 10.0];
@@ -174,22 +178,22 @@ mod tests {
         let actual_tmw = bins.transform_ts(&mut ts).unwrap();
 
         assert_eq!(actual_tmw.t.len(), actual_tmw.m.len());
-        assert_eq!(actual_tmw.t.len(), actual_tmw.w.as_ref().unwrap().len());
-        all_close(&actual_tmw.t, &desired_t, 1e-6);
-        all_close(&actual_tmw.m, &desired_m, 1e-6);
-        all_close(&actual_tmw.w.unwrap(), &desired_w, 1e-6);
+        assert_eq!(actual_tmw.t.len(), actual_tmw.w.len());
+        all_close(&actual_tmw.t.as_slice().unwrap(), &desired_t, 1e-6);
+        all_close(&actual_tmw.m.as_slice().unwrap(), &desired_m, 1e-6);
+        all_close(&actual_tmw.w.as_slice().unwrap(), &desired_w, 1e-6);
     }
 
     #[test]
     fn bins_windows_and_offsets() {
         let t = [0.0_f32, 1.0, 1.1, 1.2, 2.0, 2.1, 2.2, 2.3, 2.4, 2.5, 5.0];
         let m = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0];
-        let mut ts = TimeSeries::new(&t, &m, None);
+        let mut ts = TimeSeries::new_without_weight(&t, &m);
 
         let mut len = |window, offset| {
             let tmw = Bins::new(window, offset).transform_ts(&mut ts).unwrap();
             assert_eq!(tmw.t.len(), tmw.m.len());
-            assert_eq!(tmw.m.len(), tmw.w.as_ref().unwrap().len());
+            assert_eq!(tmw.m.len(), tmw.w.len());
             tmw.t.len()
         };
 

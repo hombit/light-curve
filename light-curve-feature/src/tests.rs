@@ -1,6 +1,8 @@
 pub use crate::extractor::FeatureExtractor;
 pub use crate::float_trait::Float;
+
 pub use light_curve_common::{all_close, linspace};
+pub use ndarray::Array1;
 pub use rand::prelude::*;
 pub use rand_distr::StandardNormal;
 
@@ -10,7 +12,7 @@ macro_rules! feature_test {
         feature_test!($name, $fe, $desired, $y, $y);
     };
     ($name: ident, $fe: tt, $desired: expr, $x: expr, $y: expr $(,)?) => {
-        feature_test!($name, $fe, $desired, $x, $y, None);
+        feature_test!($name, $fe, $desired, $x, $y, Array1::ones($x.len()));
     };
     ($name: ident, $fe: tt, $desired: expr, $x: expr, $y: expr, $w: expr $(,)?) => {
         feature_test!($name, $fe, $desired, $x, $y, $w, 1e-6);
@@ -22,7 +24,8 @@ macro_rules! feature_test {
             let desired = $desired;
             let x = $x;
             let y = $y;
-            let mut ts = TimeSeries::new(&x[..], &y[..], $w);
+            let w = $w;
+            let mut ts = TimeSeries::new(&x, &y, &w);
             let actual = fe.eval(&mut ts).unwrap();
             all_close(&desired[..], &actual[..], $tol);
 
@@ -68,13 +71,13 @@ macro_rules! eval_info_test {
                 |v: &Vec<f64>| assert_eq!(size_hint, v.len(), "size_hint() returns wrong value");
 
             let baseline = eval
-                .eval(&mut TimeSeries::new(&t1_sorted, &m1, Some(&w1)))
+                .eval(&mut TimeSeries::new(&t1_sorted, &m1, &w1))
                 .unwrap();
             check_size(&baseline);
 
             let min_ts_length = eval.min_ts_length();
             for n in (0..10) {
-                let mut ts = TimeSeries::new(&t1_sorted[..n], &m1[..n], Some(&w1[..n]));
+                let mut ts = TimeSeries::new(&t1_sorted[..n], &m1[..n], &w1[..n]);
                 let result = eval.eval(&mut ts);
                 let _ = result.as_ref().map(check_size);
                 assert_eq!(
@@ -95,7 +98,7 @@ macro_rules! eval_info_test {
                 let t2_sorted = sorted(&t2);
                 assert_ne!(t1_sorted, t2_sorted);
 
-                let mut ts = TimeSeries::new(&t2_sorted, &m1, Some(&w1));
+                let mut ts = TimeSeries::new(&t2_sorted, &m1, &w1);
 
                 let v = eval.eval(&mut ts).unwrap();
                 check_size(&v);
@@ -117,7 +120,7 @@ macro_rules! eval_info_test {
                 let m2 = randvec::<f64>(&mut rng, N);
                 assert_ne!(m1, m2);
 
-                let mut ts = TimeSeries::new(&t1_sorted, &m2, Some(&w1));
+                let mut ts = TimeSeries::new(&t1_sorted, &m2, &w1);
 
                 let v = eval.eval(&mut ts).unwrap();
                 check_size(&v);
@@ -139,7 +142,7 @@ macro_rules! eval_info_test {
                 let w2 = positive_randvec::<f64>(&mut rng, N);
                 assert_ne!(w1, w2);
 
-                let mut ts = TimeSeries::new(&t1_sorted, &m1, Some(&w2));
+                let mut ts = TimeSeries::new(&t1_sorted, &m1, &w2);
                 let v = eval.eval(&mut ts).unwrap();
                 check_size(&v);
                 let neq_baseline = !simeq(&v, &baseline, 1e-12);
@@ -160,7 +163,7 @@ macro_rules! eval_info_test {
                 let w1_ordered = sorted_by(&w1, &t1);
                 assert_ne!(w1_ordered, w1);
 
-                let mut ts = TimeSeries::new(&t1, &m1_ordered, Some(&w1_ordered));
+                let mut ts = TimeSeries::new(&t1, &m1_ordered, &w1_ordered);
                 let v = eval.eval(&mut ts).unwrap();
                 check_size(&v);
                 let neq_baseline = !simeq(&v, &baseline, 1e-12);

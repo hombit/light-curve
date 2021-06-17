@@ -308,7 +308,7 @@ mod tests {
 
         let t = linspace(0.0, (N - 1) as f64, N);
         let m: Vec<f64> = (0..N).map(|_| rng.gen()).collect();
-        let mut ts = TimeSeries::new(&t[..], &m[..], None);
+        let mut ts = TimeSeries::new_without_weight(&t[..], &m[..]);
 
         let nyquist: Box<dyn NyquistFreq<f64>> = Box::new(AverageNyquistFreq);
         let freq_grid = FreqGrid::from_t(&t, 1.0, 1.0, &nyquist);
@@ -338,7 +338,7 @@ mod tests {
 
         let t = linspace(0.0, (N - 1) as f64, N);
         let m: Vec<f64> = (0..N).map(|_| rng.gen()).collect();
-        let mut ts = TimeSeries::new(&t[..], &m[..], None);
+        let mut ts = TimeSeries::new_without_weight(&t[..], &m[..]);
 
         let nyquist: Box<dyn NyquistFreq<f64>> = Box::new(AverageNyquistFreq);
         let freq_grid = FreqGrid::from_t(&t, RESOLUTION as f32, 1.0, &nyquist);

@@ -4,6 +4,7 @@ pub use crate::time_series::TimeSeries;
 
 use dyn_clonable::*;
 pub use lazy_static::lazy_static;
+use ndarray::Array1;
 pub use std::fmt::Debug;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -109,8 +110,38 @@ pub fn get_nonzero_reduced_chi2<T: Float>(ts: &mut TimeSeries<T>) -> Result<T, E
     }
 }
 
-pub struct TmwVectors<T> {
-    pub t: Vec<T>,
-    pub m: Vec<T>,
-    pub w: Option<Vec<T>>,
+pub trait OwnedArrays<T>
+where
+    T: Float,
+{
+    fn ts(&self) -> TimeSeries<T>;
+}
+
+pub struct TmArrays<T> {
+    pub t: Array1<T>,
+    pub m: Array1<T>,
+}
+
+impl<T> OwnedArrays<T> for TmArrays<T>
+where
+    T: Float,
+{
+    fn ts(&self) -> TimeSeries<T> {
+        TimeSeries::new_without_weight(&self.t, &self.m)
+    }
+}
+
+pub struct TmwArrays<T> {
+    pub t: Array1<T>,
+    pub m: Array1<T>,
+    pub w: Array1<T>,
+}
+
+impl<T> OwnedArrays<T> for TmwArrays<T>
+where
+    T: Float,
+{
+    fn ts(&self) -> TimeSeries<T> {
+        TimeSeries::new(&self.t, &self.m, &self.w)
+    }
 }

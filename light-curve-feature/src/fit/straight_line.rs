@@ -87,7 +87,7 @@ mod tests {
     fn straight_line_fitter() {
         let x = [0.5, 1.5, 2.5, 5.0, 7.0, 16.0];
         let y = [-1.0, 3.0, 2.0, 6.0, 10.0, 25.0];
-        let ts = TimeSeries::new(&x, &y, None);
+        let ts = TimeSeries::new_without_weight(&x, &y);
         // scipy.optimize.curve_fit(absolute_sigma=False)
         let desired_slope = 1.63021767;
         let desired_slope_sigma2 = 0.0078127;
@@ -103,7 +103,7 @@ mod tests {
         let x = [0.5, 1.5, 2.5, 5.0, 7.0, 16.0];
         let y = [-1.0, 3.0, 2.0, 6.0, 10.0, 25.0];
         let w = [2.0, 1.0, 3.0, 10.0, 1.0, 0.4];
-        let ts = TimeSeries::new(&x, &y, Some(&w));
+        let ts = TimeSeries::new(&x, &y, &w);
         // curve_fit(lambda x, a, b: a + b*x, xdata=x, ydata=y, sigma=w**-0.5, absolute_sigma=True)
         let desired_slope = 1.6023644;
         let desired_slope_sigma2 = 0.00882845;

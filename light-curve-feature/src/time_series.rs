@@ -144,18 +144,57 @@ impl<'a, T> TimeSeries<'a, T>
 where
     T: Float,
 {
-    pub fn new(t: &'a [T], m: &'a [T], w: Option<&'a [T]>) -> Self {
-        assert_eq!(t.len(), m.len(), "t and m should have the same size");
+    pub fn new(
+        t: impl Into<ArrayView1<'a, T>>,
+        m: impl Into<ArrayView1<'a, T>>,
+        w: impl Into<ArrayView1<'a, T>>,
+    ) -> Self {
+        let t = DataSample::new(t);
+        let m = DataSample::new(m);
+        let w = DataSample::new(w);
+
+        assert_eq!(
+            t.sample.len(),
+            m.sample.len(),
+            "t and m should have the same size"
+        );
+        assert_eq!(
+            m.sample.len(),
+            w.sample.len(),
+            "m and err should have the same size"
+        );
+
         Self {
-            t: DataSample::new(t),
-            m: DataSample::new(m),
-            w: match w {
-                Some(w) => {
-                    assert_eq!(m.len(), w.len(), "m and err should have the same size");
-                    DataSample::new(w)
-                }
-                None => DataSample::new(T::array0_unity().broadcast(t.len()).unwrap()),
-            },
+            t,
+            m,
+            w,
+            m_weighted_mean: None,
+            m_reduced_chi2: None,
+            t_max_m: None,
+            t_min_m: None,
+            plateau: None,
+        }
+    }
+
+    pub fn new_without_weight(
+        t: impl Into<ArrayView1<'a, T>>,
+        m: impl Into<ArrayView1<'a, T>>,
+    ) -> Self {
+        let t = DataSample::new(t);
+        let m = DataSample::new(m);
+
+        assert_eq!(
+            t.sample.len(),
+            m.sample.len(),
+            "t and m should have the same size"
+        );
+
+        let w = DataSample::new(T::array0_unity().broadcast(t.sample.len()).unwrap());
+
+        Self {
+            t,
+            m,
+            w,
             m_weighted_mean: None,
             m_reduced_chi2: None,
             t_max_m: None,
@@ -314,7 +353,7 @@ mod tests {
             11.83854198,
         ];
         let w = [0.1282489, 0.10576467, 0.32102692, 0.12962352, 0.10746144];
-        let mut ts = TimeSeries::new(&t[..], &m[..], Some(&w[..]));
+        let mut ts = TimeSeries::new(&t, &m, &w);
         // np.average(m, weights=w)
         let desired = [16.31817047752941];
         all_close(&[ts.get_m_weighted_mean()], &desired[..], 1e-6);
@@ -331,7 +370,7 @@ mod tests {
             11.83854198,
         ];
         let w = [0.1282489, 0.10576467, 0.32102692, 0.12962352, 0.10746144];
-        let mut ts = TimeSeries::new(&t[..], &m[..], Some(&w[..]));
+        let mut ts = TimeSeries::new(&t, &m, &w);
         let desired = [1.3752251301435465];
         all_close(&[ts.get_m_reduced_chi2()], &desired[..], 1e-6);
     }

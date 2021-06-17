@@ -104,7 +104,7 @@ mod tests {
         const N: usize = 100;
         let t = linspace(0.0, 99.0, N);
         let m: Vec<_> = t.iter().map(|&x| f64::sin(OMEGA_SIN * x)).collect();
-        let mut ts = TimeSeries::new(&t[..], &m[..], None);
+        let mut ts = TimeSeries::new_without_weight(&t, &m);
         let mut periodogram = Periodogram::new(
             Box::new(PeriodogramPowerDirect),
             FreqGrid {
@@ -164,7 +164,7 @@ mod tests {
 
         let t = linspace(0.0, (N - 1) as f64, N);
         let m: Vec<_> = t.iter().map(|&x| f64::sin(OMEGA * x)).collect();
-        let mut ts = TimeSeries::new(&t[..], &m[..], None);
+        let mut ts = TimeSeries::new_without_weight(&t, &m);
         let nyquist: Box<dyn NyquistFreq<f64>> = Box::new(AverageNyquistFreq);
 
         let direct = Periodogram::from_t(
@@ -200,7 +200,7 @@ mod tests {
             .iter()
             .map(|&x| f64::sin(OMEGA1 * x) + AMPLITUDE2 * f64::cos(OMEGA2 * x))
             .collect();
-        let mut ts = TimeSeries::new(&t[..], &m[..], None);
+        let mut ts = TimeSeries::new_without_weight(&t, &m);
         let nyquist: Box<dyn NyquistFreq<f64>> = Box::new(AverageNyquistFreq);
 
         let direct = Periodogram::from_t(
@@ -249,7 +249,7 @@ mod tests {
                     + NOISE_AMPLITUDE * rng.gen::<f64>()
             })
             .collect();
-        let mut ts = TimeSeries::new(&t[..], &m[..], None);
+        let mut ts = TimeSeries::new_without_weight(&t, &m);
         let nyquist: Box<dyn NyquistFreq<f64>> = Box::new(MedianNyquistFreq);
 
         let direct = Periodogram::from_t(
