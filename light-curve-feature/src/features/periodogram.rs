@@ -4,7 +4,6 @@ use crate::peak_indices::peak_indices_reverse_sorted;
 use crate::periodogram;
 use crate::periodogram::{AverageNyquistFreq, NyquistFreq, PeriodogramPower, PeriodogramPowerFft};
 
-use ndarray::Array1;
 use std::iter;
 
 fn number_ending(i: usize) -> &'static str {
