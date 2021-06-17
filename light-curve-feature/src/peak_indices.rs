@@ -1,39 +1,35 @@
 use crate::float_trait::Float;
 
-pub trait PeakIndices<T>
+use ndarray::ArrayView1;
+
+pub fn peak_indices<'a, T>(a: impl Into<ArrayView1<'a, T>>) -> Vec<usize>
 where
     T: Float,
 {
-    fn peak_indices(&self) -> Vec<usize>;
-    fn peak_indices_reverse_sorted(&self) -> Vec<usize>;
+    let view: ArrayView1<'a, T> = a.into();
+    view.iter()
+        .enumerate()
+        .fold(
+            (vec![], T::infinity(), false),
+            |(mut v, prev_x, prev_is_rising), (i, &x)| {
+                let is_rising = x > prev_x;
+                if prev_is_rising && (!is_rising) {
+                    v.push(i - 1)
+                }
+                (v, x, is_rising)
+            },
+        )
+        .0
 }
 
-impl<T> PeakIndices<T> for [T]
+pub fn peak_indices_reverse_sorted<'a, T>(a: impl Into<ArrayView1<'a, T>>) -> Vec<usize>
 where
     T: Float,
 {
-    /// Indices of local maxima, edge points are never included
-    fn peak_indices(&self) -> Vec<usize> {
-        self.iter()
-            .enumerate()
-            .fold(
-                (vec![], T::infinity(), false),
-                |(mut v, prev_x, prev_is_rising), (i, &x)| {
-                    let is_rising = x > prev_x;
-                    if prev_is_rising && (!is_rising) {
-                        v.push(i - 1)
-                    }
-                    (v, x, is_rising)
-                },
-            )
-            .0
-    }
-
-    fn peak_indices_reverse_sorted(&self) -> Vec<usize> {
-        let mut v = self.peak_indices();
-        v[..].sort_unstable_by(|&b, &a| self[a].partial_cmp(&self[b]).unwrap());
-        v
-    }
+    let view: ArrayView1<'a, T> = a.into();
+    let mut v = peak_indices(view);
+    v[..].sort_unstable_by(|&y, &x| view[x].partial_cmp(&view[y]).unwrap());
+    v
 }
 
 #[cfg(test)]
@@ -46,7 +42,7 @@ mod tests {
         ($name: ident, $desired: expr, $x: expr $(,)?) => {
             #[test]
             fn $name() {
-                assert_eq!($x.peak_indices_reverse_sorted(), $desired);
+                assert_eq!(peak_indices_reverse_sorted(&$x), $desired);
             }
         };
     }

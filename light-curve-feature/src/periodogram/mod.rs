@@ -1,5 +1,6 @@
 use crate::float_trait::Float;
 use crate::time_series::TimeSeries;
+
 use conv::ConvAsUtil;
 
 mod fft;
@@ -90,8 +91,10 @@ where
 #[allow(clippy::excessive_precision)]
 mod tests {
     use super::*;
-    use crate::peak_indices::PeakIndices;
+
+    use crate::peak_indices::peak_indices_reverse_sorted;
     use crate::sorted_array::SortedArray;
+
     use light_curve_common::{all_close, linspace};
     use rand::prelude::*;
 
@@ -218,8 +221,8 @@ mod tests {
         .power(&mut ts);
 
         assert_eq!(
-            &fft.peak_indices_reverse_sorted()[..2],
-            &direct.peak_indices_reverse_sorted()[..2]
+            peak_indices_reverse_sorted(&fft)[..2],
+            peak_indices_reverse_sorted(&direct)[..2]
         );
     }
 
@@ -267,8 +270,8 @@ mod tests {
         .power(&mut ts);
 
         assert_eq!(
-            &fft.peak_indices_reverse_sorted()[..2],
-            &direct.peak_indices_reverse_sorted()[..2]
+            peak_indices_reverse_sorted(&fft)[..2],
+            peak_indices_reverse_sorted(&direct)[..2]
         );
     }
 }

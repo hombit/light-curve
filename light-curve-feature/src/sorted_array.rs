@@ -5,6 +5,7 @@ use itertools::Itertools;
 use ndarray::Array1;
 use std::ops::Deref;
 
+// Underlying array is guaranteed to be sorted and contiguous
 #[derive(Clone, Debug)]
 pub struct SortedArray<T>(pub Array1<T>);
 

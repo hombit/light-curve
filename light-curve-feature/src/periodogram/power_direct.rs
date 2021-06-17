@@ -21,7 +21,7 @@ where
     fn power(&self, freq: &FreqGrid<T>, ts: &mut TimeSeries<T>) -> Vec<T> {
         let m_mean = ts.m.get_mean();
 
-        let sin_cos_omega_tau = SinCosOmegaTau::new(freq.step, &ts.t.sample.as_slice().unwrap());
+        let sin_cos_omega_tau = SinCosOmegaTau::new(freq.step, ts.t.sample.iter());
         let mut sin_cos_omega_x: Vec<_> =
             ts.t.sample
                 .iter()
@@ -81,9 +81,8 @@ struct SinCosOmegaTau<T> {
 }
 
 impl<T: Float> SinCosOmegaTau<T> {
-    fn new(freq0: T, t: &[T]) -> Self {
+    fn new<'a>(freq0: T, t: impl Iterator<Item = &'a T>) -> Self {
         let sin_cos_2omega_x = t
-            .iter()
             .map(|&x| RecurrentSinCos::new(T::two() * freq0 * x))
             .collect();
         Self { sin_cos_2omega_x }

@@ -1,6 +1,6 @@
 use crate::evaluator::*;
 use crate::extractor::FeatureExtractor;
-use crate::peak_indices::PeakIndices;
+use crate::peak_indices::peak_indices_reverse_sorted;
 use crate::periodogram;
 use crate::periodogram::{AverageNyquistFreq, NyquistFreq, PeriodogramPower, PeriodogramPowerFft};
 use std::iter;
@@ -80,12 +80,8 @@ where
 {
     fn eval(&self, ts: &mut TimeSeries<T>) -> Result<Vec<T>, EvaluatorError> {
         self.check_ts_length(ts)?;
-        Ok(ts
-            .m
-            .sample
-            .as_slice()
-            .unwrap()
-            .peak_indices_reverse_sorted()
+        let peak_indices = peak_indices_reverse_sorted(ts.m.sample);
+        Ok(peak_indices
             .iter()
             .flat_map(|&i| {
                 iter::once(Periodogram::period(ts.t.sample[i]))
