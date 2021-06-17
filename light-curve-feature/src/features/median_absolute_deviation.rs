@@ -38,8 +38,11 @@ where
     fn eval(&self, ts: &mut TimeSeries<T>) -> Result<Vec<T>, EvaluatorError> {
         self.check_ts_length(ts)?;
         let m_median = ts.m.get_median();
-        let deviation: Vec<_> = ts.m.sample.iter().map(|&y| T::abs(y - m_median)).collect();
-        let sorted_deviation: SortedArray<_> = deviation.into();
+        let sorted_deviation: SortedArray<_> =
+            ts.m.sample
+                .mapv(|m| T::abs(m - m_median))
+                .into_raw_vec()
+                .into();
         Ok(vec![sorted_deviation.median()])
     }
 

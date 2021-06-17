@@ -24,6 +24,7 @@ pub trait Float:
     + FromPrimitive
     + PartialOrd
     + Sum
+    + ValueFrom<u32>
     + ValueFrom<usize>
     + ValueFrom<f32>
     + ValueInto<f64>

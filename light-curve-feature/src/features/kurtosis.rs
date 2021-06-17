@@ -1,5 +1,7 @@
 use crate::evaluator::*;
 
+use ndarray::Zip;
+
 /// Excess kurtosis of magnitude
 ///
 /// $$
@@ -47,10 +49,10 @@ where
         let n_1 = n - T::one();
         let n_2 = n - T::two();
         let n_3 = n - T::three();
-        let value =
-            ts.m.sample.iter().map(|&x| (x - m_mean).powi(4)).sum::<T>() / m_std2.powi(2) * n * n1
-                / (n_1 * n_2 * n_3)
-                - T::three() * n_1.powi(2) / (n_2 * n_3);
+        let forth_moment =
+            Zip::from(ts.m.sample).fold(T::zero(), |sum, &m| sum + (m - m_mean).powi(4));
+        let value = forth_moment / m_std2.powi(2) * n * n1 / (n_1 * n_2 * n_3)
+            - T::three() * n_1.powi(2) / (n_2 * n_3);
         Ok(vec![value])
     }
 

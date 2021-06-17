@@ -1,6 +1,7 @@
 use crate::evaluator::*;
 
 use conv::ConvUtil;
+use ndarray::Zip;
 
 /// Fraction of observations beyond $n\\,\sigma\_m$ from the mean magnitude $\langle m \rangle$
 ///
@@ -92,15 +93,11 @@ where
         self.check_ts_length(ts)?;
         let m_mean = ts.m.get_mean();
         let threshold = ts.m.get_std() * self.nstd;
-        Ok(vec![
-            ts.m.sample
-                .iter()
-                .filter(|&&y| T::abs(y - m_mean) > threshold)
-                .count()
-                .value_as::<T>()
-                .unwrap()
-                / ts.lenf(),
-        ])
+        let count_beyond = Zip::from(ts.m.sample).fold(0, |count, &m| {
+            let beyond = T::abs(m - m_mean) > threshold;
+            count + (beyond as u32)
+        });
+        Ok(vec![count_beyond.value_as::<T>().unwrap() / ts.lenf()])
     }
 
     fn get_info(&self) -> &EvaluatorInfo {

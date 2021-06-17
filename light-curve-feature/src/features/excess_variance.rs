@@ -1,5 +1,7 @@
 use crate::evaluator::*;
 
+use ndarray::Zip;
+
 /// Measure of the variability amplitude
 ///
 /// $$
@@ -39,7 +41,8 @@ where
 {
     fn eval(&self, ts: &mut TimeSeries<T>) -> Result<Vec<T>, EvaluatorError> {
         self.check_ts_length(ts)?;
-        let mean_error2 = ts.w.sample.iter().map(|w| w.recip()).sum::<T>() / ts.lenf();
+        let mean_error2 =
+            Zip::from(ts.w.sample).fold(T::zero(), |sum, w| sum + w.recip()) / ts.lenf();
         Ok(vec![
             (ts.m.get_std2() - mean_error2) / ts.m.get_mean().powi(2),
         ])
