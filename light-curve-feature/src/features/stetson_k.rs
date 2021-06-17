@@ -1,5 +1,7 @@
 use crate::evaluator::*;
 
+use ndarray::Zip;
+
 /// Stetson $K$ coefficient described light curve shape
 ///
 /// $$
@@ -41,10 +43,10 @@ where
         self.check_ts_length(ts)?;
         let chi2 = get_nonzero_reduced_chi2(ts)? * (ts.lenf() - T::one());
         let mean = ts.get_m_weighted_mean();
-        let value = ts
-            .mw_iter()
-            .map(|(y, w)| T::abs(y - mean) * T::sqrt(w))
-            .sum::<T>()
+        println!("{:?}", ts.w.sample);
+        let value = Zip::from(&ts.m.sample)
+            .and(&ts.w.sample)
+            .fold(T::zero(), |acc, &y, &w| acc + T::abs(y - mean) * T::sqrt(w))
             / T::sqrt(ts.lenf() * chi2);
         Ok(vec![value])
     }

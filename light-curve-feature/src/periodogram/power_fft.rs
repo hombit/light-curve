@@ -3,7 +3,9 @@ use crate::periodogram::fft::*;
 use crate::periodogram::freq::FreqGrid;
 use crate::periodogram::power::*;
 use crate::time_series::TimeSeries;
+
 use conv::{ConvAsUtil, RoundToNearest};
+use ndarray::Zip;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt;
@@ -257,12 +259,14 @@ fn spread_arrays_for_fft<T: Float>(
     let t0 = ts.t.sample[0];
     let m_mean = ts.m.get_mean();
 
-    for (t, m) in ts.tm_iter() {
-        let x = (t - t0) / grid.dt;
-        spread(x_sch, x, m - m_mean);
-        let double_x = T::two() * x;
-        spread(x_sc2, double_x, T::one());
-    }
+    Zip::from(&ts.t.sample)
+        .and(&ts.m.sample)
+        .for_each(|&t, &m| {
+            let x = (t - t0) / grid.dt;
+            spread(x_sch, x, m - m_mean);
+            let double_x = T::two() * x;
+            spread(x_sc2, double_x, T::one());
+        });
 }
 
 #[cfg(test)]

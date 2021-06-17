@@ -16,7 +16,7 @@ impl<T> SortedArray<T>
 where
     T: Float,
 {
-    pub fn new(sorted_array: Array1<T>) -> Result<Self, SortedArrayError> {
+    pub fn from_sorted(sorted_array: Array1<T>) -> Result<Self, SortedArrayError> {
         // Replace with Slice::is_sorted when it stabilizes
         // https://github.com/rust-lang/rust/issues/53485
         if is_sorted(

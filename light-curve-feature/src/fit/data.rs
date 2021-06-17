@@ -83,16 +83,18 @@ where
         let (inv_err_scale, inv_err) = if m_std.is_zero() {
             (
                 T::one(),
-                ts.w_iter()
-                    .map(|x| x.approx_as::<T>().unwrap().sqrt())
+                ts.w.sample
+                    .iter()
+                    .map(|&x| x.approx_as::<T>().unwrap().sqrt())
                     .collect(),
             )
         } else {
             let scale = m_std.recip();
-            let inv_scale = ts
-                .w_iter()
-                .map(|x| x.approx_as::<T>().unwrap().sqrt() * m_std)
-                .collect();
+            let inv_scale =
+                ts.w.sample
+                    .iter()
+                    .map(|&x| x.approx_as::<T>().unwrap().sqrt() * m_std)
+                    .collect();
             (scale, inv_scale)
         };
 

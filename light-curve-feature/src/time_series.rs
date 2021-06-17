@@ -1,17 +1,17 @@
 use crate::float_trait::Float;
 use crate::sorted_array::SortedArray;
-use crate::statistics::Statistics;
 
 use conv::prelude::*;
-use itertools::{Either, Itertools};
-use std::iter;
+use itertools::Itertools;
+use ndarray::{s, ArrayView1, Zip};
+use ndarray_stats::{QuantileExt, SummaryStatisticsExt};
 
 #[derive(Clone, Debug)]
 pub struct DataSample<'a, T>
 where
     T: Float,
 {
-    pub sample: &'a [T],
+    pub sample: ArrayView1<'a, T>,
     sorted: Option<SortedArray<T>>,
     min: Option<T>,
     max: Option<T>,
@@ -22,25 +22,14 @@ where
 }
 
 macro_rules! data_sample_getter {
-    ($attr: ident, $getter: ident, $method: ident) => {
-        pub fn $getter(&mut self) -> T {
-            match self.$attr {
-                Some(x) => x,
-                None => {
-                    self.$attr = Some(self.sample.$method());
-                    self.$attr.unwrap()
-                }
-            }
-        }
-    };
-    ($attr: ident, $getter: ident, $method: ident, $method_sorted: ident) => {
+    ($attr: ident, $getter: ident, $func: expr, $method_sorted: ident) => {
         pub fn $getter(&mut self) -> T {
             match self.$attr {
                 Some(x) => x,
                 None => {
                     self.$attr = Some(match self.sorted.as_ref() {
                         Some(sorted) => sorted.$method_sorted(),
-                        None => self.sample.$method(),
+                        None => $func(self),
                     });
                     self.$attr.unwrap()
                 }
@@ -63,11 +52,10 @@ macro_rules! data_sample_getter {
 impl<'a, T> DataSample<'a, T>
 where
     T: Float,
-    [T]: Statistics<T>,
 {
-    fn new(sample: &'a [T]) -> Self {
+    fn new(array: impl Into<ArrayView1<'a, T>>) -> Self {
         Self {
-            sample,
+            sample: array.into(),
             sorted: None,
             min: None,
             max: None,
@@ -80,14 +68,26 @@ where
 
     pub fn get_sorted(&mut self) -> &SortedArray<T> {
         if self.sorted.is_none() {
-            self.sorted = Some(self.sample.into());
+            self.sorted = Some(self.sample.to_vec().into());
         }
         self.sorted.as_ref().unwrap()
     }
 
-    data_sample_getter!(min, get_min, minimum, minimum);
-    data_sample_getter!(max, get_max, maximum, maximum);
-    data_sample_getter!(mean, get_mean, mean);
+    data_sample_getter!(
+        min,
+        get_min,
+        |ds: &mut DataSample<'a, T>| { *ds.sample.min().expect("time series must be non-empty") },
+        minimum
+    );
+    data_sample_getter!(
+        max,
+        get_max,
+        |ds: &mut DataSample<'a, T>| { *ds.sample.max().expect("time series must be non-empty") },
+        maximum
+    );
+    data_sample_getter!(mean, get_mean, |ds: &mut DataSample<'a, T>| {
+        ds.sample.mean().expect("time series must be non-empty")
+    });
     data_sample_getter!(median, get_median, |ds: &mut DataSample<'a, T>| {
         ds.get_sorted().median()
     });
@@ -95,9 +95,7 @@ where
         ds.get_std2().sqrt()
     });
     data_sample_getter!(std2, get_std2, |ds: &mut DataSample<'a, T>| {
-        let mean = ds.get_mean();
-        ds.sample.iter().map(|&x| (x - mean).powi(2)).sum::<T>()
-            / (ds.sample.len() - 1).value_as::<T>().unwrap()
+        ds.sample.var(T::one())
     });
 
     pub fn signal_to_noise(&mut self, value: T) -> T {
@@ -116,16 +114,17 @@ where
 {
     pub t: DataSample<'a, T>,
     pub m: DataSample<'a, T>,
-    pub w: Option<DataSample<'a, T>>,
+    pub w: DataSample<'a, T>,
     m_weighted_mean: Option<T>,
     m_reduced_chi2: Option<T>,
     t_max_m: Option<T>,
     t_min_m: Option<T>,
+    plateau: Option<bool>,
 }
 
 macro_rules! time_series_getter {
-    ($attr: ident, $getter: ident, $func: expr) => {
-        pub fn $getter(&mut self) -> T {
+    ($t: ty, $attr: ident, $getter: ident, $func: expr) => {
+        pub fn $getter(&mut self) -> $t {
             match self.$attr {
                 Some(x) => x,
                 None => {
@@ -134,6 +133,10 @@ macro_rules! time_series_getter {
                 }
             }
         }
+    };
+
+    ($attr: ident, $getter: ident, $func: expr) => {
+        time_series_getter!(T, $attr, $getter, $func);
     };
 }
 
@@ -146,14 +149,18 @@ where
         Self {
             t: DataSample::new(t),
             m: DataSample::new(m),
-            w: w.map(|w| {
-                assert_eq!(m.len(), w.len(), "m and err should have the same size");
-                DataSample::new(w)
-            }),
+            w: match w {
+                Some(w) => {
+                    assert_eq!(m.len(), w.len(), "m and err should have the same size");
+                    DataSample::new(w)
+                }
+                None => DataSample::new(T::array0_unity().broadcast(t.len()).unwrap()),
+            },
             m_weighted_mean: None,
             m_reduced_chi2: None,
             t_max_m: None,
             t_min_m: None,
+            plateau: None,
         }
     }
 
@@ -166,57 +173,38 @@ where
         self.lenu().value_as::<T>().unwrap()
     }
 
-    /// Weight iterator, if weight is None, returns iterator with ones
-    pub fn w_iter(&self) -> impl Iterator<Item = T> + 'a {
-        match self.w.as_ref() {
-            Some(w) => Either::Left(w.sample.iter().copied()),
-            None => Either::Right(iter::repeat_with(T::one).take(self.lenu())),
-        }
-    }
-
-    /// (t, m) pair iter
-    pub fn tm_iter(&self) -> impl Iterator<Item = (T, T)> + 'a {
-        self.t
-            .sample
-            .iter()
-            .copied()
-            .zip(self.m.sample.iter().copied())
-    }
-
-    /// (t, w) pair iter
-    pub fn tw_iter(&self) -> impl Iterator<Item = (T, T)> + 'a {
-        self.t.sample.iter().copied().zip(self.w_iter())
-    }
-
-    /// (m, w) pair iterator
-    pub fn mw_iter(&self) -> impl Iterator<Item = (T, T)> + 'a {
-        self.m.sample.iter().copied().zip(self.w_iter())
-    }
-
-    pub fn tmw_iter(&self) -> impl Iterator<Item = (T, T, T)> + 'a {
-        self.t
-            .sample
-            .iter()
-            .zip(self.m.sample.iter().zip(self.w_iter()))
-            .map(|(&t, (&m, w))| (t, m, w))
-    }
-
     time_series_getter!(
         m_weighted_mean,
         get_m_weighted_mean,
-        |ts: &mut TimeSeries<T>| {
-            ts.mw_iter().map(|(y, w)| y * w).sum::<T>() / ts.w_iter().sum()
-        }
+        |ts: &mut TimeSeries<T>| { ts.m.sample.weighted_mean(&ts.w.sample).unwrap() }
     );
 
     time_series_getter!(m_reduced_chi2, get_m_reduced_chi2, |ts: &mut TimeSeries<
         T,
     >| {
         let m_weighed_mean = ts.get_m_weighted_mean();
-        ts.mw_iter()
-            .map(|(y, w)| (y - m_weighed_mean).powi(2) * w)
-            .sum::<T>()
-            / (ts.lenf() - T::one())
+        let m_reduced_chi2 = Zip::from(&ts.m.sample)
+            .and(&ts.w.sample)
+            .fold(T::zero(), |chi2, &m, &w| {
+                chi2 + (m - m_weighed_mean).powi(2) * w
+            })
+            / (ts.lenf() - T::one());
+        if m_reduced_chi2.is_zero() {
+            ts.plateau = Some(true);
+        }
+        m_reduced_chi2
+    });
+
+    time_series_getter!(bool, plateau, is_plateau, |ts: &mut TimeSeries<T>| {
+        if ts.m.max.is_some() && ts.m.max == ts.m.min {
+            return true;
+        }
+        if ts.m.std2 == Some(T::zero()) {
+            return true;
+        }
+        let m0 = ts.m.sample[0];
+        // all() returns true for the empty slice, i.e. one-point time series
+        Zip::from(ts.m.sample.slice(s![1..])).all(|&m| m == m0)
     });
 
     fn set_t_min_max_m(&mut self) {
@@ -226,7 +214,7 @@ where
             .iter()
             .position_minmax()
             .into_option()
-            .expect("time series must to be non-empty");
+            .expect("time series must be non-empty");
         self.t_min_m = Some(self.t.sample[i_min]);
         self.t_max_m = Some(self.t.sample[i_max]);
     }

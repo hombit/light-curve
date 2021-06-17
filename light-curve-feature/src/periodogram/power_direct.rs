@@ -21,7 +21,7 @@ where
     fn power(&self, freq: &FreqGrid<T>, ts: &mut TimeSeries<T>) -> Vec<T> {
         let m_mean = ts.m.get_mean();
 
-        let sin_cos_omega_tau = SinCosOmegaTau::new(freq.step, ts.t.sample);
+        let sin_cos_omega_tau = SinCosOmegaTau::new(freq.step, &ts.t.sample.as_slice().unwrap());
         let mut sin_cos_omega_x: Vec<_> =
             ts.t.sample
                 .iter()

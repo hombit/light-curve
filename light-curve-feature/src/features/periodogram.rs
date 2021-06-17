@@ -83,6 +83,8 @@ where
         Ok(ts
             .m
             .sample
+            .as_slice()
+            .unwrap()
             .peak_indices_reverse_sorted()
             .iter()
             .flat_map(|&i| {
@@ -237,7 +239,7 @@ where
     fn periodogram(&self, ts: &mut TimeSeries<T>) -> periodogram::Periodogram<T> {
         periodogram::Periodogram::from_t(
             self.periodogram_algorithm.clone(),
-            ts.t.sample,
+            ts.t.sample.as_slice().unwrap(),
             self.resolution,
             self.max_freq_factor,
             &self.nyquist,

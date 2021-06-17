@@ -39,7 +39,7 @@ where
 {
     fn eval(&self, ts: &mut TimeSeries<T>) -> Result<Vec<T>, EvaluatorError> {
         self.check_ts_length(ts)?;
-        let mean_error2 = ts.w_iter().map(|w| w.recip()).sum::<T>() / ts.lenf();
+        let mean_error2 = ts.w.sample.iter().map(|w| w.recip()).sum::<T>() / ts.lenf();
         Ok(vec![
             (ts.m.get_std2() - mean_error2) / ts.m.get_mean().powi(2),
         ])

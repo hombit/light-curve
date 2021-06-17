@@ -95,21 +95,26 @@ where
 
     fn transform_ts(&self, ts: &mut TimeSeries<T>) -> Result<TmwVectors<T>, EvaluatorError> {
         self.check_ts_length(ts)?;
-        let (t, m, w) = ts
-            .tmw_iter()
-            .group_by(|(t, _, _)| ((*t - self.offset) / self.window).floor())
-            .into_iter()
-            .map(|(x, group)| {
-                let bin_t = (x + T::half()) * self.window;
-                let (n, bin_m, norm) = group
-                    .fold((T::zero(), T::zero(), T::zero()), |acc, (_, m, w)| {
-                        (acc.0 + T::one(), acc.1 + m * w, acc.2 + w)
-                    });
-                let bin_m = bin_m / norm;
-                let bin_w = norm / n;
-                (bin_t, bin_m, bin_w)
-            })
-            .unzip3();
+        let (t, m, w) =
+            ts.t.sample
+                .iter()
+                .copied()
+                .zip(ts.m.sample.iter().copied())
+                .zip(ts.w.sample.iter().copied())
+                .map(|((t, m), w)| (t, m, w))
+                .group_by(|(t, _, _)| ((*t - self.offset) / self.window).floor())
+                .into_iter()
+                .map(|(x, group)| {
+                    let bin_t = (x + T::half()) * self.window;
+                    let (n, bin_m, norm) = group
+                        .fold((T::zero(), T::zero(), T::zero()), |acc, (_, m, w)| {
+                            (acc.0 + T::one(), acc.1 + m * w, acc.2 + w)
+                        });
+                    let bin_m = bin_m / norm;
+                    let bin_w = norm / n;
+                    (bin_t, bin_m, bin_w)
+                })
+                .unzip3();
         Ok(TmwVectors { t, m, w: Some(w) })
     }
 
