@@ -244,24 +244,24 @@ where
         )
     }
 
-    pub fn power(&self, ts: &mut TimeSeries<T>) -> Array1<T> {
-        self.periodogram(ts).power(ts).into()
+    pub fn power(&self, ts: &mut TimeSeries<T>) -> Vec<T> {
+        self.periodogram(ts).power(ts)
     }
 
-    pub fn freq_power(&self, ts: &mut TimeSeries<T>) -> (Array1<T>, Array1<T>) {
+    pub fn freq_power(&self, ts: &mut TimeSeries<T>) -> (Vec<T>, Vec<T>) {
         let p = self.periodogram(ts);
-        let power: Array1<_> = p.power(ts).into();
-        let freq = (0..power.len())
-            .map(|i| p.freq(i))
-            .collect::<Vec<_>>()
-            .into();
+        let power = p.power(ts);
+        let freq = (0..power.len()).map(|i| p.freq(i)).collect::<Vec<_>>();
         (freq, power)
     }
 
     fn transform_ts(&self, ts: &mut TimeSeries<T>) -> Result<TmArrays<T>, EvaluatorError> {
         self.check_ts_length(ts)?;
         let (freq, power) = self.freq_power(ts);
-        Ok(TmArrays { t: freq, m: power })
+        Ok(TmArrays {
+            t: freq.into(),
+            m: power.into(),
+        })
     }
 
     fn period(omega: T) -> T {
