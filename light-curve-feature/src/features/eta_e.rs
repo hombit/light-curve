@@ -43,9 +43,9 @@ where
         self.check_ts_length(ts)?;
         let m_std2 = get_nonzero_m_std2(ts)?;
         let sq_slope_sum =
-            ts.t.sample
+            ts.t.as_slice()
                 .iter()
-                .zip(ts.m.sample.iter())
+                .zip(ts.m.as_slice().iter())
                 .tuple_windows()
                 .map(|((&t1, &m1), (&t2, &m2))| ((m2 - m1) / (t2 - t1)).powi(2))
                 .filter(|&x| x.is_finite())

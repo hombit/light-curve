@@ -236,7 +236,7 @@ where
     fn periodogram(&self, ts: &mut TimeSeries<T>) -> periodogram::Periodogram<T> {
         periodogram::Periodogram::from_t(
             self.periodogram_algorithm.clone(),
-            ts.t.sample.as_slice().unwrap(),
+            ts.t.as_slice(),
             self.resolution,
             self.max_freq_factor,
             &self.nyquist,

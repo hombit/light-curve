@@ -96,11 +96,11 @@ where
     fn transform_ts(&self, ts: &mut TimeSeries<T>) -> Result<TmwArrays<T>, EvaluatorError> {
         self.check_ts_length(ts)?;
         let (t, m, w): (Vec<_>, Vec<_>, Vec<_>) =
-            ts.t.sample
+            ts.t.as_slice()
                 .iter()
                 .copied()
-                .zip(ts.m.sample.iter().copied())
-                .zip(ts.w.sample.iter().copied())
+                .zip(ts.m.as_slice().iter().copied())
+                .zip(ts.w.as_slice().iter().copied())
                 .map(|((t, m), w)| (t, m, w))
                 .group_by(|(t, _, _)| ((*t - self.offset) / self.window).floor())
                 .into_iter()

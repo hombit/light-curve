@@ -41,7 +41,7 @@ where
         self.check_ts_length(ts)?;
         let m_std2 = get_nonzero_m_std2(ts)?;
         let value =
-            ts.m.sample
+            ts.m.as_slice()
                 .iter()
                 .tuple_windows()
                 .map(|(&a, &b)| (b - a).powi(2))

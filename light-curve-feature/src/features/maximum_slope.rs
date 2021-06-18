@@ -38,9 +38,9 @@ where
     fn eval(&self, ts: &mut TimeSeries<T>) -> Result<Vec<T>, EvaluatorError> {
         self.check_ts_length(ts)?;
         let result =
-            ts.t.sample
+            ts.t.as_slice()
                 .iter()
-                .zip(ts.m.sample.iter())
+                .zip(ts.m.as_slice().iter())
                 .tuple_windows()
                 .map(|((&t1, &m1), (&t2, &m2))| T::abs((m1 - m2) / (t2 - t1)))
                 .filter(|&x| x.is_finite())

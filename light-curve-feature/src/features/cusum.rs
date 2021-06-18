@@ -45,7 +45,7 @@ where
         self.check_ts_length(ts)?;
         let m_std = get_nonzero_m_std(ts)?;
         let m_mean = ts.m.get_mean();
-        let (_last_cusum, min_cusum, max_cusum) = ts.m.sample.iter().fold(
+        let (_last_cusum, min_cusum, max_cusum) = ts.m.as_slice().iter().fold(
             (T::zero(), T::infinity(), -T::infinity()),
             |(mut cusum, min_cusum, max_cusum), &m| {
                 cusum += m - m_mean;

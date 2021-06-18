@@ -36,7 +36,7 @@ where
     fn eval(&self, ts: &mut TimeSeries<T>) -> Result<Vec<T>, EvaluatorError> {
         self.check_ts_length(ts)?;
         let dt =
-            ts.t.sample
+            ts.t.as_slice()
                 .iter()
                 .tuple_windows()
                 .map(|(&a, &b)| b - a)

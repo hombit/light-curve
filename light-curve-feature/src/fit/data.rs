@@ -66,7 +66,7 @@ where
         } else {
             let mean = ds.get_mean().approx_as::<T>().unwrap();
             let v = ds
-                .sample
+                .as_slice()
                 .iter()
                 .map(|&x| (x.approx_as::<T>().unwrap() - mean) / std)
                 .collect();
@@ -83,7 +83,7 @@ where
         let (inv_err_scale, inv_err) = if m_std.is_zero() {
             (
                 T::one(),
-                ts.w.sample
+                ts.w.as_slice()
                     .iter()
                     .map(|&x| x.approx_as::<T>().unwrap().sqrt())
                     .collect(),
@@ -91,7 +91,7 @@ where
         } else {
             let scale = m_std.recip();
             let inv_scale =
-                ts.w.sample
+                ts.w.as_slice()
                     .iter()
                     .map(|&x| x.approx_as::<T>().unwrap().sqrt() * m_std)
                     .collect();

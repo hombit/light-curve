@@ -21,9 +21,9 @@ where
     fn power(&self, freq: &FreqGrid<T>, ts: &mut TimeSeries<T>) -> Vec<T> {
         let m_mean = ts.m.get_mean();
 
-        let sin_cos_omega_tau = SinCosOmegaTau::new(freq.step, ts.t.sample.iter());
+        let sin_cos_omega_tau = SinCosOmegaTau::new(freq.step, ts.t.as_slice().iter());
         let mut sin_cos_omega_x: Vec<_> =
-            ts.t.sample
+            ts.t.as_slice()
                 .iter()
                 .map(|&x| RecurrentSinCos::new(freq.step * x))
                 .collect();
@@ -34,7 +34,7 @@ where
                 let mut sum_m_sin = T::zero();
                 let mut sum_m_cos = T::zero();
                 let mut sum_sin2 = T::zero();
-                for (s_c_omega_x, &y) in sin_cos_omega_x.iter_mut().zip(ts.m.sample.iter()) {
+                for (s_c_omega_x, &y) in sin_cos_omega_x.iter_mut().zip(ts.m.as_slice().iter()) {
                     let (sin_omega_x, cos_omega_x) = s_c_omega_x.next().unwrap();
                     // sine and cosine of omega * (x - tau)
                     let sin = sin_omega_x * cos_omega_tau - cos_omega_x * sin_omega_tau;

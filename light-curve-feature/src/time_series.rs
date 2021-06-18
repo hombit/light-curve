@@ -295,7 +295,7 @@ where
     fn set_t_min_max_m(&mut self) {
         let (i_min, i_max) = self
             .m
-            .sample
+            .as_slice()
             .iter()
             .position_minmax()
             .into_option()
