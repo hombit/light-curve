@@ -1,7 +1,6 @@
 use crate::evaluator::*;
 
 use conv::ConvUtil;
-use ndarray::Zip;
 
 /// Fraction of observations beyond $n\\,\sigma\_m$ from the mean magnitude $\langle m \rangle$
 ///
@@ -93,7 +92,7 @@ where
         self.check_ts_length(ts)?;
         let m_mean = ts.m.get_mean();
         let threshold = ts.m.get_std() * self.nstd;
-        let count_beyond = Zip::from(&ts.m.sample).fold(0, |count, &m| {
+        let count_beyond = ts.m.sample.fold(0, |count, &m| {
             let beyond = T::abs(m - m_mean) > threshold;
             count + (beyond as u32)
         });
