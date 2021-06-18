@@ -109,6 +109,8 @@ impl<T> AsRef<[T]> for SortedArray<T> {
 mod tests {
     use super::*;
 
+    use light_curve_common::all_close;
+
     #[test]
     fn median_is_ppf_half() {
         for i in 0..10 {
@@ -140,5 +142,16 @@ mod tests {
                 .into();
             assert_eq!(a.maximum(), a.ppf(1.0));
         }
+    }
+
+    #[test]
+    fn ppf_tenths() {
+        let a = SortedArray::from_sorted(Array1::linspace(0.0, 1.0, 11)).unwrap();
+        let q = Array1::linspace(0.0, 1.0, 11);
+        let actual: Vec<_> = q.iter().map(|&q| a.ppf(q)).collect();
+        // from scipy.stats.mstats import mquantiles
+        // mquantiles(np.linspace(0, 1, 11), prob=np.linspace(0, 1, 11), alphap=0.5, betap=0.5)
+        let desired = [0., 0.06, 0.17, 0.28, 0.39, 0.5, 0.61, 0.72, 0.83, 0.94, 1.];
+        all_close(&actual, &desired, 1e-7);
     }
 }
