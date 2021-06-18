@@ -61,3 +61,5 @@ pub mod peak_indices;
 
 pub mod time_series;
 pub use time_series::TimeSeries;
+
+mod types;

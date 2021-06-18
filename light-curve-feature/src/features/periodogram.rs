@@ -81,7 +81,7 @@ where
 {
     fn eval(&self, ts: &mut TimeSeries<T>) -> Result<Vec<T>, EvaluatorError> {
         self.check_ts_length(ts)?;
-        let peak_indices = peak_indices_reverse_sorted(ts.m.sample);
+        let peak_indices = peak_indices_reverse_sorted(&ts.m.sample);
         Ok(peak_indices
             .iter()
             .flat_map(|&i| {

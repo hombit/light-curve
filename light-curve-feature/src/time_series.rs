@@ -1,9 +1,10 @@
 use crate::float_trait::Float;
 use crate::sorted_array::SortedArray;
+use crate::types::CowArray1;
 
 use conv::prelude::*;
 use itertools::Itertools;
-use ndarray::{s, ArrayView1, Zip};
+use ndarray::{s, Array1, ArrayView1, Zip};
 use ndarray_stats::{QuantileExt, SummaryStatisticsExt};
 
 #[derive(Clone, Debug)]
@@ -11,7 +12,7 @@ pub struct DataSample<'a, T>
 where
     T: Float,
 {
-    pub sample: ArrayView1<'a, T>,
+    pub sample: CowArray1<'a, T>,
     sorted: Option<SortedArray<T>>,
     min: Option<T>,
     max: Option<T>,
@@ -53,9 +54,9 @@ impl<'a, T> DataSample<'a, T>
 where
     T: Float,
 {
-    fn new(array: impl Into<ArrayView1<'a, T>>) -> Self {
+    fn new(sample: CowArray1<'a, T>) -> Self {
         Self {
-            sample: array.into(),
+            sample,
             sorted: None,
             min: None,
             max: None,
@@ -64,6 +65,14 @@ where
             std: None,
             std2: None,
         }
+    }
+
+    pub fn as_slice(&mut self) -> &[T] {
+        if !self.sample.is_standard_layout() {
+            let owned: Array1<_> = self.sample.iter().copied().collect::<Vec<_>>().into();
+            self.sample = owned.into();
+        }
+        self.sample.as_slice().unwrap()
     }
 
     pub fn get_sorted(&mut self) -> &SortedArray<T> {
@@ -107,6 +116,43 @@ where
     }
 }
 
+impl<'a, T, Slice: ?Sized> From<&'a Slice> for DataSample<'a, T>
+where
+    T: Float,
+    Slice: AsRef<[T]>,
+{
+    fn from(s: &'a Slice) -> Self {
+        ArrayView1::from(s).into()
+    }
+}
+
+impl<'a, T> From<Vec<T>> for DataSample<'a, T>
+where
+    T: Float,
+{
+    fn from(v: Vec<T>) -> Self {
+        Array1::from(v).into()
+    }
+}
+
+impl<'a, T> From<ArrayView1<'a, T>> for DataSample<'a, T>
+where
+    T: Float,
+{
+    fn from(a: ArrayView1<'a, T>) -> Self {
+        Self::new(a.into())
+    }
+}
+
+impl<'a, T> From<Array1<T>> for DataSample<'a, T>
+where
+    T: Float,
+{
+    fn from(a: Array1<T>) -> Self {
+        Self::new(a.into())
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct TimeSeries<'a, T>
 where
@@ -145,13 +191,13 @@ where
     T: Float,
 {
     pub fn new(
-        t: impl Into<ArrayView1<'a, T>>,
-        m: impl Into<ArrayView1<'a, T>>,
-        w: impl Into<ArrayView1<'a, T>>,
+        t: impl Into<DataSample<'a, T>>,
+        m: impl Into<DataSample<'a, T>>,
+        w: impl Into<DataSample<'a, T>>,
     ) -> Self {
-        let t = DataSample::new(t);
-        let m = DataSample::new(m);
-        let w = DataSample::new(w);
+        let t = t.into();
+        let m = m.into();
+        let w = w.into();
 
         assert_eq!(
             t.sample.len(),
@@ -177,11 +223,11 @@ where
     }
 
     pub fn new_without_weight(
-        t: impl Into<ArrayView1<'a, T>>,
-        m: impl Into<ArrayView1<'a, T>>,
+        t: impl Into<DataSample<'a, T>>,
+        m: impl Into<DataSample<'a, T>>,
     ) -> Self {
-        let t = DataSample::new(t);
-        let m = DataSample::new(m);
+        let t = t.into();
+        let m = m.into();
 
         assert_eq!(
             t.sample.len(),
@@ -189,7 +235,7 @@ where
             "t and m should have the same size"
         );
 
-        let w = DataSample::new(T::array0_unity().broadcast(t.sample.len()).unwrap());
+        let w = T::array0_unity().broadcast(t.sample.len()).unwrap().into();
 
         Self {
             t,
@@ -288,11 +334,11 @@ mod tests {
                 let x = $x;
                 let desired = $desired;
 
-                let mut ds = DataSample::new(&x[..]);
+                let mut ds: DataSample<_> = DataSample::from(&x);
                 all_close(&[ds.$method()], &desired[..], 1e-6);
                 all_close(&[ds.$method()], &desired[..], 1e-6);
 
-                let mut ds = DataSample::new(&x[..]);
+                let mut ds: DataSample<_> = DataSample::from(&x);
                 ds.get_sorted();
                 all_close(&[ds.$method()], &desired[..], 1e-6);
                 all_close(&[ds.$method()], &desired[..], 1e-6);

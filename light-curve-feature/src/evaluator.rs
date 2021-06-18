@@ -114,7 +114,7 @@ pub trait OwnedArrays<T>
 where
     T: Float,
 {
-    fn ts(&self) -> TimeSeries<T>;
+    fn ts(self) -> TimeSeries<'static, T>;
 }
 
 pub struct TmArrays<T> {
@@ -126,8 +126,8 @@ impl<T> OwnedArrays<T> for TmArrays<T>
 where
     T: Float,
 {
-    fn ts(&self) -> TimeSeries<T> {
-        TimeSeries::new_without_weight(&self.t, &self.m)
+    fn ts(self) -> TimeSeries<'static, T> {
+        TimeSeries::new_without_weight(self.t, self.m)
     }
 }
 
@@ -141,7 +141,7 @@ impl<T> OwnedArrays<T> for TmwArrays<T>
 where
     T: Float,
 {
-    fn ts(&self) -> TimeSeries<T> {
-        TimeSeries::new(&self.t, &self.m, &self.w)
+    fn ts(self) -> TimeSeries<'static, T> {
+        TimeSeries::new(self.t, self.m, self.w)
     }
 }

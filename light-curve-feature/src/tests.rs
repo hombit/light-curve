@@ -2,7 +2,7 @@ pub use crate::extractor::FeatureExtractor;
 pub use crate::float_trait::Float;
 
 pub use light_curve_common::{all_close, linspace};
-pub use ndarray::Array1;
+pub use ndarray::{Array1, ArrayView1};
 pub use rand::prelude::*;
 pub use rand_distr::StandardNormal;
 
@@ -12,7 +12,7 @@ macro_rules! feature_test {
         feature_test!($name, $fe, $desired, $y, $y);
     };
     ($name: ident, $fe: tt, $desired: expr, $x: expr, $y: expr $(,)?) => {
-        feature_test!($name, $fe, $desired, $x, $y, Array1::ones($x.len()));
+        feature_test!($name, $fe, $desired, $x, $y, vec![1.0; $x.len()]);
     };
     ($name: ident, $fe: tt, $desired: expr, $x: expr, $y: expr, $w: expr $(,)?) => {
         feature_test!($name, $fe, $desired, $x, $y, $w, 1e-6);
