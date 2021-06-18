@@ -104,7 +104,11 @@ where
         ds.get_std2().sqrt()
     });
     data_sample_getter!(std2, get_std2, |ds: &mut DataSample<'a, T>| {
-        ds.sample.var(T::one())
+        // Benchmarks show that it is faster than `ndarray::ArrayBase::var(T::one)`
+        let mean = ds.get_mean();
+        ds.sample
+            .fold(T::zero(), |sum, &x| sum + (x - mean).powi(2))
+            / (ds.sample.len() - 1).value_as::<T>().unwrap()
     });
 
     pub fn signal_to_noise(&mut self, value: T) -> T {
