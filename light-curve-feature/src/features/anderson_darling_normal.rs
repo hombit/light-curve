@@ -48,6 +48,7 @@ where
         let m_mean = ts.m.get_mean();
         let sum: f64 =
             ts.m.get_sorted()
+                .as_ref()
                 .iter()
                 .enumerate()
                 // ln \Phi(x) = -ln2 + ln_erfc(-x / sqrt2)
