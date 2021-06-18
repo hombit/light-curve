@@ -68,7 +68,7 @@ where
     T: Float,
 {
     fn power(&self, freq: &FreqGrid<T>, ts: &mut TimeSeries<T>) -> Vec<T> {
-        let m_std2 = ts.m.get_std().powi(2);
+        let m_std2 = ts.m.get_std2();
 
         if m_std2.is_zero() {
             return vec![T::zero(); freq.size.next_power_of_two()];
