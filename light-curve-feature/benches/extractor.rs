@@ -53,7 +53,7 @@ where
             FeatureExtractor::new(features.clone()),
         )))
         .chain(std::iter::once((
-            "Bins + StandardDeviation",
+            "Bins",
             FeatureExtractor::new(vec![Box::new(bins)]),
         )))
         .chain(std::iter::once((
