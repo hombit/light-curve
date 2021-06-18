@@ -43,7 +43,6 @@ where
         self.check_ts_length(ts)?;
         let chi2 = get_nonzero_reduced_chi2(ts)? * (ts.lenf() - T::one());
         let mean = ts.get_m_weighted_mean();
-        println!("{:?}", ts.w.sample);
         let value = Zip::from(&ts.m.sample)
             .and(&ts.w.sample)
             .fold(T::zero(), |acc, &y, &w| acc + T::abs(y - mean) * T::sqrt(w))
