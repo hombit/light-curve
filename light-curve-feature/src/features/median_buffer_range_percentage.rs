@@ -1,7 +1,6 @@
 use crate::evaluator::*;
 
 use conv::ConvUtil;
-use ndarray::Zip;
 
 /// Fraction of observations inside $\mathrm{Median}(m) \pm q \times (\max(m) - \min(m)) / 2$ interval
 ///
@@ -78,7 +77,7 @@ where
         let m_median = ts.m.get_median();
         let amplitude = T::half() * (ts.m.get_max() - ts.m.get_min());
         let threshold = self.quantile * amplitude;
-        let count_under = Zip::from(&ts.m.sample).fold(0, |count, &m| {
+        let count_under = ts.m.sample.fold(0, |count, &m| {
             let under = T::abs(m - m_median) < threshold;
             count + (under as u32)
         });

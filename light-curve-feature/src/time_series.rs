@@ -5,7 +5,7 @@ use crate::types::CowArray1;
 use conv::prelude::*;
 use itertools::Itertools;
 use ndarray::{s, Array1, ArrayView1, Zip};
-use ndarray_stats::{QuantileExt, SummaryStatisticsExt};
+use ndarray_stats::SummaryStatisticsExt;
 
 #[derive(Clone, Debug)]
 pub struct DataSample<'a, T>
@@ -82,16 +82,39 @@ where
         self.sorted.as_ref().unwrap()
     }
 
+    fn set_min_max(&mut self) {
+        let (min, max) =
+            self.sample
+                .slice(s![1..])
+                .fold((self.sample[0], self.sample[0]), |(min, max), &x| {
+                    if x > max {
+                        (min, x)
+                    } else if x < min {
+                        (x, max)
+                    } else {
+                        (min, max)
+                    }
+                });
+        self.min = Some(min);
+        self.max = Some(max);
+    }
+
     data_sample_getter!(
         min,
         get_min,
-        |ds: &mut DataSample<'a, T>| { *ds.sample.min().expect("time series must be non-empty") },
+        |ds: &mut DataSample<'a, T>| {
+            ds.set_min_max();
+            ds.min.unwrap()
+        },
         minimum
     );
     data_sample_getter!(
         max,
         get_max,
-        |ds: &mut DataSample<'a, T>| { *ds.sample.max().expect("time series must be non-empty") },
+        |ds: &mut DataSample<'a, T>| {
+            ds.set_min_max();
+            ds.max.unwrap()
+        },
         maximum
     );
     data_sample_getter!(mean, get_mean, |ds: &mut DataSample<'a, T>| {
