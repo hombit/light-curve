@@ -5,7 +5,6 @@ use crate::periodogram::power::*;
 use crate::time_series::TimeSeries;
 
 use conv::{ConvAsUtil, RoundToNearest};
-use ndarray::Zip;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt;
