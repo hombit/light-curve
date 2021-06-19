@@ -258,7 +258,7 @@ fn spread_arrays_for_fft<T: Float>(
     let t0 = ts.t.sample[0];
     let m_mean = ts.m.get_mean();
 
-    // For contiguous arrays it is faster than ndarray::Zip::fold
+    // For contiguous arrays it is faster than ndarray::Zip::for_each
     ts.t.as_slice()
         .iter()
         .zip(ts.m.as_slice().iter())
