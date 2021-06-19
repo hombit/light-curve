@@ -5,7 +5,6 @@ use crate::periodogram::power::*;
 use crate::time_series::TimeSeries;
 
 use conv::{ConvAsUtil, RoundToNearest};
-use ndarray::Zip;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt;
@@ -259,9 +258,11 @@ fn spread_arrays_for_fft<T: Float>(
     let t0 = ts.t.sample[0];
     let m_mean = ts.m.get_mean();
 
-    Zip::from(&ts.t.sample)
-        .and(&ts.m.sample)
-        .for_each(|&t, &m| {
+    // For contiguous arrays it is faster than ndarray::Zip::for_each
+    ts.t.as_slice()
+        .iter()
+        .zip(ts.m.as_slice().iter())
+        .for_each(|(&t, &m)| {
             let x = (t - t0) / grid.dt;
             spread(x_sch, x, m - m_mean);
             let double_x = T::two() * x;
