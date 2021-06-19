@@ -40,9 +40,15 @@ where
         let result =
             ts.t.as_slice()
                 .iter()
-                .zip(ts.m.as_slice().iter())
                 .tuple_windows()
-                .map(|((&t1, &m1), (&t2, &m2))| T::abs((m1 - m2) / (t2 - t1)))
+                .map(|(&t1, &t2)| t2 - t1)
+                .zip(
+                    ts.m.as_slice()
+                        .iter()
+                        .tuple_windows()
+                        .map(|(&m1, &m2)| m2 - m1),
+                )
+                .map(|(dt, dm)| T::abs(dm / dt))
                 .filter(|&x| x.is_finite())
                 .max_by(|a, b| a.partial_cmp(b).unwrap())
                 .expect("All points of the light curve have the same time");
