@@ -69,7 +69,7 @@ mod tests {
 
     feature_test!(
         mean,
-        [Box::new(ExcessVariance::new())],
+        [ExcessVariance::new()],
         [0.41846885813148793],
         [0.0; 9],
         [1.0_f32, 1.0, 1.0, 1.0, 5.0, 6.0, 6.0, 6.0, 7.0],

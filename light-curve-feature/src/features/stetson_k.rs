@@ -75,7 +75,7 @@ mod tests {
 
     feature_test!(
         stetson_k_square_wave,
-        [Box::new(StetsonK::new())],
+        [StetsonK::new()],
         [1.0],
         [1.0; 1000], // isn't used
         (0..1000)
@@ -93,7 +93,7 @@ mod tests {
     // Slow convergence, use high tol
     feature_test!(
         stetson_k_sinus,
-        [Box::new(StetsonK::new())],
+        [StetsonK::new()],
         [8_f64.sqrt() / PI],
         [1.0; 1000], // isn't used
         linspace(0.0, 2.0 * PI, 1000)
@@ -106,7 +106,7 @@ mod tests {
 
     feature_test!(
         stetson_k_sawtooth,
-        [Box::new(StetsonK::new())],
+        [StetsonK::new()],
         [12_f64.sqrt() / 4.0],
         [1.0; 1000], // isn't used
         linspace(0.0, 1.0, 1000),
@@ -116,7 +116,7 @@ mod tests {
     // It seems that Stetson (1996) formula for this case is wrong by the factor of 2 * sqrt((N-1) / N)
     feature_test!(
         stetson_k_single_peak,
-        [Box::new(StetsonK::new())],
+        [StetsonK::new()],
         [2.0 * 99.0_f64.sqrt() / 100.0],
         [1.0; 100], // isn't used
         (0..100)
@@ -133,9 +133,9 @@ mod tests {
 
     #[test]
     fn stetson_k_plateau() {
-        let fe = feat_extr!(StetsonK::new());
+        let eval = StetsonK::new();
         let x = [0.0; 10];
         let mut ts = TimeSeries::new(&x, &x, None);
-        assert_eq!(fe.eval(&mut ts), Err(EvaluatorError::FlatTimeSeries));
+        assert_eq!(eval.eval(&mut ts), Err(EvaluatorError::FlatTimeSeries));
     }
 }

@@ -22,7 +22,7 @@ use conv::ConvUtil;
 /// use light_curve_common::all_close;
 /// use std::f64::consts::SQRT_2;
 ///
-/// let fe = feat_extr!(BeyondNStd::default(), BeyondNStd::new(2.0));
+/// let fe = FeatureExtractor::new(vec![BeyondNStd::default(), BeyondNStd::new(2.0)]);
 /// let time = [0.0; 21];  // Doesn't depend on time
 /// let mut magn = vec![0.0; 17];
 /// magn.extend_from_slice(&[SQRT_2, -SQRT_2, 2.0 * SQRT_2, -2.0 * SQRT_2]);
@@ -128,9 +128,9 @@ mod tests {
     feature_test!(
         beyond_n_std,
         [
-            Box::new(BeyondNStd::default()),
-            Box::new(BeyondNStd::new(1.0)), // should be the same as the previous one
-            Box::new(BeyondNStd::new(2.0)),
+            BeyondNStd::default(),
+            BeyondNStd::new(1.0), // should be the same as the previous one
+            BeyondNStd::new(2.0),
         ],
         [0.2, 0.2, 0.0],
         [1.0_f32, 2.0, 3.0, 4.0, 100.0],

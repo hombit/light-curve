@@ -72,6 +72,7 @@ where
 #[allow(clippy::excessive_precision)]
 mod tests {
     use super::*;
+    use crate::extractor::FeatureExtractor;
     use crate::features::Eta;
     use crate::tests::*;
 
@@ -79,7 +80,7 @@ mod tests {
 
     feature_test!(
         eta_e,
-        [Box::new(EtaE::new())],
+        [EtaE::new()],
         [0.6957894],
         [1.0_f32, 2.0, 5.0, 10.0],
         [1.0_f32, 1.0, 6.0, 8.0],
@@ -87,7 +88,10 @@ mod tests {
 
     #[test]
     fn eta_is_eta_e_for_even_grid() {
-        let fe = feat_extr!(Eta::default(), EtaE::default());
+        let fe = FeatureExtractor::<_, Feature<_>>::new(vec![
+            Eta::default().into(),
+            EtaE::default().into(),
+        ]);
         let x = linspace(0.0_f64, 1.0, 11);
         let y: Vec<_> = x.iter().map(|&t| 3.0 + t.powi(2)).collect();
         let mut ts = TimeSeries::new(&x, &y, None);
@@ -98,7 +102,7 @@ mod tests {
     /// See [Issue #2](https://github.com/hombit/light-curve/issues/2)
     #[test]
     fn eta_e_finite() {
-        let fe = FeatureExtractor::new(vec![Box::new(EtaE::default())]);
+        let eval = EtaE::default();
         let x = [
             58197.50390625,
             58218.48828125,
@@ -310,7 +314,7 @@ mod tests {
             17.257999420166016,
         ];
         let mut ts = TimeSeries::new(&x[..], &y[..], None);
-        let actual: f32 = fe.eval(&mut ts).unwrap()[0];
+        let actual: f32 = eval.eval(&mut ts).unwrap()[0];
         assert!(actual.is_finite());
     }
 }

@@ -67,7 +67,7 @@ mod tests {
 
     feature_test!(
         percent_amplitude,
-        [Box::new(PercentAmplitude::new())],
+        [PercentAmplitude::new()],
         [96.0],
         [1.0_f32, 1.0, 1.0, 2.0, 4.0, 5.0, 5.0, 98.0, 100.0],
     );

@@ -108,9 +108,9 @@ mod tests {
     feature_test!(
         percent_difference_magnitude_percentile,
         [
-            Box::new(PercentDifferenceMagnitudePercentile::default()),
-            Box::new(PercentDifferenceMagnitudePercentile::new(0.05)), // should be the same
-            Box::new(PercentDifferenceMagnitudePercentile::new(0.1)),
+            PercentDifferenceMagnitudePercentile::default(),
+            PercentDifferenceMagnitudePercentile::new(0.05), // should be the same
+            PercentDifferenceMagnitudePercentile::new(0.1),
         ],
         [4.85, 4.85, 4.6],
         [

@@ -78,7 +78,7 @@ mod tests {
 
     feature_test!(
         linear_trend,
-        [Box::new(LinearTrend::new())],
+        [LinearTrend::new()],
         [1.38198758, 0.24532195657979344],
         [1.0_f32, 3.0, 5.0, 7.0, 11.0, 13.0],
         [1.0_f32, 2.0, 3.0, 8.0, 10.0, 19.0],
@@ -87,7 +87,7 @@ mod tests {
     /// See [Issue #3](https://github.com/hombit/light-curve/issues/3)
     #[test]
     fn linear_trend_finite_sigma() {
-        let fe = FeatureExtractor::new(vec![Box::new(LinearTrend::default())]);
+        let eval = LinearTrend::default();
         let x = [
             58216.51171875,
             58217.48828125,
@@ -307,14 +307,14 @@ mod tests {
             18.69700050354004,
         ];
         let mut ts = TimeSeries::new(&x[..], &y[..], None);
-        let sigma: f32 = fe.eval(&mut ts).unwrap()[1];
+        let sigma: f32 = eval.eval(&mut ts).unwrap()[1];
         assert!(sigma.is_finite());
     }
 
     /// See [Issue #3](https://github.com/hombit/light-curve/issues/3)
     #[test]
     fn linear_trend_finite_trend_and_sigma_1() {
-        let fe = FeatureExtractor::new(vec![Box::new(LinearTrend::default())]);
+        let eval = LinearTrend::default();
         let x = [
             58231.140625,
             58303.4765625,
@@ -520,14 +520,14 @@ mod tests {
             19.21500015258789,
         ];
         let mut ts: TimeSeries<f32> = TimeSeries::new(&x[..], &y[..], None);
-        let actual = fe.eval(&mut ts).unwrap();
+        let actual = eval.eval(&mut ts).unwrap();
         assert!(actual.iter().all(|x| x.is_finite()));
     }
 
     /// See [Issue #3](https://github.com/hombit/light-curve/issues/3)
     #[test]
     fn linear_trend_finite_trend_and_sigma_2() {
-        let fe = FeatureExtractor::new(vec![Box::new(LinearTrend::default())]);
+        let eval = LinearTrend::default();
         let x = [
             58231.140625,
             58303.4765625,
@@ -733,13 +733,13 @@ mod tests {
             18.075000762939453,
         ];
         let mut ts: TimeSeries<f32> = TimeSeries::new(&x[..], &y[..], None);
-        let actual = fe.eval(&mut ts).unwrap();
+        let actual = eval.eval(&mut ts).unwrap();
         assert!(actual.iter().all(|x| x.is_finite()));
     }
 
     #[test]
     fn linear_trend_finite_trend_and_sigma_3() {
-        let fe = FeatureExtractor::new(vec![Box::new(LinearTrend::default())]);
+        let eval = LinearTrend::default();
         let x = [
             198.39394, 198.40166, 198.43057, 198.45149, 198.45248, 198.4768, 198.48457, 198.48549,
             216.39883, 216.39975, 217.3903, 217.41743, 217.4417, 217.46191, 218.34486, 218.3973,
@@ -824,13 +824,13 @@ mod tests {
             16.609, 16.592, 16.574, 16.562, 16.558, 16.581, 16.581, 16.602, 16.581, 16.595,
         ];
         let mut ts: TimeSeries<f32> = TimeSeries::new(&x[..], &y[..], None);
-        let actual = fe.eval(&mut ts).unwrap();
+        let actual = eval.eval(&mut ts).unwrap();
         assert!(actual.iter().all(|x| x.is_finite()));
     }
 
     #[test]
     fn linear_trend_finite_trend_and_sigma_4() {
-        let fe = FeatureExtractor::new(vec![Box::new(LinearTrend::default())]);
+        let eval = LinearTrend::default();
         let x = [
             198.39395, 198.40167, 198.4306, 198.4515, 198.45251, 198.47682, 198.4846, 198.4855,
             216.39883, 216.39977, 217.3903, 217.41743, 217.4417, 217.46191, 218.34488, 218.3973,
@@ -915,7 +915,7 @@ mod tests {
             16.586, 16.585, 16.583, 16.662, 16.613, 16.607, 16.592, 16.603, 16.608,
         ];
         let mut ts: TimeSeries<f32> = TimeSeries::new(&x[..], &y[..], None);
-        let actual = fe.eval(&mut ts).unwrap();
+        let actual = eval.eval(&mut ts).unwrap();
         assert!(actual.iter().all(|x| x.is_finite()));
     }
 }

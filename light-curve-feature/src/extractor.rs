@@ -3,18 +3,26 @@ use crate::evaluator::*;
 use crate::float_trait::Float;
 use crate::time_series::TimeSeries;
 
+use std::marker::PhantomData;
+
 /// The engine that extracts features one by one
 #[derive(Clone, Debug)]
-pub struct FeatureExtractor<T: Float> {
-    info: EvaluatorInfo,
-    features: VecFe<T>,
-}
-
-impl<T> FeatureExtractor<T>
+pub struct FeatureExtractor<T, F>
 where
     T: Float,
+    F: FeatureEvaluator<T>,
 {
-    pub fn new(features: VecFe<T>) -> Self {
+    info: EvaluatorInfo,
+    features: Vec<F>,
+    phantom: PhantomData<T>,
+}
+
+impl<T, F> FeatureExtractor<T, F>
+where
+    T: Float,
+    F: FeatureEvaluator<T>,
+{
+    pub fn new(features: Vec<F>) -> Self {
         let info = EvaluatorInfo {
             size: features.iter().map(|x| x.size_hint()).sum(),
             min_ts_length: features
@@ -27,22 +35,31 @@ where
             w_required: features.iter().any(|x| x.is_w_required()),
             sorting_required: features.iter().any(|x| x.is_sorting_required()),
         };
-        Self { info, features }
+        Self {
+            info,
+            features,
+            phantom: PhantomData,
+        }
+    }
+
+    pub fn from_iter(features: impl IntoIterator<Item = F>) -> Self {
+        Self::new(features.into_iter().collect())
     }
 
     /// Copy of the feature vector
-    pub fn clone_features(&self) -> VecFe<T> {
+    pub fn clone_features(&self) -> Vec<F> {
         self.features.clone()
     }
 
-    pub fn add_feature(&mut self, feature: Box<dyn FeatureEvaluator<T>>) {
+    pub fn add_feature(&mut self, feature: F) {
         self.features.push(feature);
     }
 }
 
-impl<T> FeatureEvaluator<T> for FeatureExtractor<T>
+impl<T, F> FeatureEvaluator<T> for FeatureExtractor<T, F>
 where
     T: Float,
+    F: FeatureEvaluator<T>,
 {
     fn eval(&self, ts: &mut TimeSeries<T>) -> Result<Vec<T>, EvaluatorError> {
         let mut vec = Vec::with_capacity(self.size_hint());

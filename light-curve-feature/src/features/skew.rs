@@ -74,7 +74,7 @@ mod tests {
 
     feature_test!(
         skew,
-        [Box::new(Skew::new())],
+        [Skew::new()],
         [0.4626804756753222],
         [2.0_f32, 3.0, 5.0, 7.0, 11.0, 13.0],
     );

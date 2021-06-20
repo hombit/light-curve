@@ -70,7 +70,7 @@ mod tests {
 
     feature_test!(
         median_absolute_deviation,
-        [Box::new(MedianAbsoluteDeviation::new())],
+        [MedianAbsoluteDeviation::new()],
         [4.0],
         [1.0_f32, 1.0, 1.0, 1.0, 5.0, 6.0, 6.0, 6.0, 100.0],
     );

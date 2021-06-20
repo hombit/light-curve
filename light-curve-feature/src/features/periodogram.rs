@@ -19,7 +19,7 @@ fn number_ending(i: usize) -> &'static str {
 
 /// Peak evaluator for `Periodogram`
 #[derive(Clone, Debug)]
-struct PeriodogramPeaks {
+pub struct PeriodogramPeaks {
     info: EvaluatorInfo,
     peaks: usize,
     names: Vec<String>,
@@ -86,7 +86,7 @@ where
             .peak_indices_reverse_sorted()
             .iter()
             .flat_map(|&i| {
-                iter::once(Periodogram::period(ts.t.sample[i]))
+                iter::once(T::two() * T::PI() / ts.t.sample[i])
                     .chain(iter::once(ts.m.signal_to_noise(ts.m.sample[i])))
             })
             .chain(iter::repeat(T::zero()))
@@ -126,20 +126,25 @@ where
 /// - Minimum number of observations: **2** (or as required by sub-features)
 /// - Number of features: **$2 \times \mathrm{peaks}~+...$**
 #[derive(Clone, Debug)]
-pub struct Periodogram<T: Float> {
+pub struct Periodogram<T, F>
+where
+    T: Float,
+    F: FeatureEvaluator<T>,
+{
     info: EvaluatorInfo,
     resolution: f32,
     max_freq_factor: f32,
     nyquist: Box<dyn NyquistFreq<T>>,
-    feature_extractor: FeatureExtractor<T>,
+    feature_extractor: FeatureExtractor<T, F>,
     feature_names: Vec<String>,
     feature_descriptions: Vec<String>,
     periodogram_algorithm: Box<dyn PeriodogramPower<T>>,
 }
 
-impl<T> Periodogram<T>
+impl<T, F> Periodogram<T, F>
 where
     T: Float,
+    F: FeatureEvaluator<T> + From<PeriodogramPeaks>,
 {
     #[inline]
     pub fn default_peaks() -> usize {
@@ -161,9 +166,8 @@ where
         let peaks = PeriodogramPeaks::new(peaks);
         let peak_names = peaks.names.clone();
         let peak_descriptions = peaks.descriptions.clone();
-        let peaks_evaluator = &peaks as &dyn FeatureEvaluator<T>;
-        let peaks_size_hint = peaks_evaluator.size_hint();
-        let peaks_min_ts_length = peaks_evaluator.min_ts_length();
+        let peaks_size_hint = FeatureEvaluator::<T>::size_hint(&peaks);
+        let peaks_min_ts_length = FeatureEvaluator::<T>::min_ts_length(&peaks);
         Self {
             info: EvaluatorInfo {
                 size: peaks_size_hint,
@@ -176,7 +180,7 @@ where
             resolution: Self::default_resolution(),
             max_freq_factor: Self::default_max_freq_factor(),
             nyquist: Box::new(AverageNyquistFreq),
-            feature_extractor: feat_extr!(peaks),
+            feature_extractor: FeatureExtractor::new(vec![peaks.into()]),
             feature_names: peak_names,
             feature_descriptions: peak_descriptions,
             periodogram_algorithm: Box::new(PeriodogramPowerFft::new()),
@@ -208,7 +212,7 @@ where
     }
 
     /// Extend a feature to extract from periodogram
-    pub fn add_feature(&mut self, feature: Box<dyn FeatureEvaluator<T>>) -> &mut Self {
+    pub fn add_feature(&mut self, feature: F) -> &mut Self {
         self.info.size += feature.size_hint();
         self.feature_names.extend(
             feature
@@ -264,24 +268,22 @@ where
             w: None,
         })
     }
-
-    fn period(omega: T) -> T {
-        T::two() * T::PI() / omega
-    }
 }
 
-impl<T> Default for Periodogram<T>
+impl<T, F> Default for Periodogram<T, F>
 where
     T: Float,
+    F: FeatureEvaluator<T> + From<PeriodogramPeaks>,
 {
     fn default() -> Self {
         Self::new(Self::default_peaks())
     }
 }
 
-impl<T> FeatureEvaluator<T> for Periodogram<T>
+impl<T, F> FeatureEvaluator<T> for Periodogram<T, F>
 where
     T: Float,
+    F: FeatureEvaluator<T> + From<PeriodogramPeaks>,
 {
     transformer_eval!();
 }
@@ -309,25 +311,25 @@ mod tests {
 
     eval_info_test!(periodogram_info_3, {
         let mut periodogram = Periodogram::default();
-        periodogram.add_feature(Box::new(Amplitude::default()));
+        periodogram.add_feature(Amplitude::default().into());
         periodogram.set_periodogram_algorithm(Box::new(PeriodogramPowerDirect {}));
         periodogram
     });
 
     #[test]
     fn periodogram_plateau() {
-        let fe = FeatureExtractor::new(vec![Box::new(Periodogram::default())]);
+        let periodogram: Periodogram<_, Feature<_>> = Periodogram::default();
         let x = linspace(0.0_f32, 1.0, 100);
         let y = [0.0_f32; 100];
         let mut ts = TimeSeries::new(&x[..], &y[..], None);
         let desired = vec![0.0, 0.0];
-        let actual = fe.eval(&mut ts).unwrap();
+        let actual = periodogram.eval(&mut ts).unwrap();
         assert_eq!(desired, actual);
     }
 
     #[test]
     fn periodogram_evenly_sinus() {
-        let fe = FeatureExtractor::new(vec![Box::new(Periodogram::default())]);
+        let periodogram: Periodogram<_, Feature<_>> = Periodogram::default();
         let mut rng = StdRng::seed_from_u64(0);
         let period = 0.17;
         let x = linspace(0.0_f32, 1.0, 101);
@@ -341,13 +343,13 @@ mod tests {
             .collect();
         let mut ts = TimeSeries::new(&x[..], &y[..], None);
         let desired = [period];
-        let actual = [fe.eval(&mut ts).unwrap()[0]]; // Test period only
+        let actual = [periodogram.eval(&mut ts).unwrap()[0]]; // Test period only
         all_close(&desired[..], &actual[..], 5e-3);
     }
 
     #[test]
     fn periodogram_unevenly_sinus() {
-        let fe = FeatureExtractor::new(vec![Box::new(Periodogram::default())]);
+        let periodogram: Periodogram<_, Feature<_>> = Periodogram::default();
         let period = 0.17;
         let mut rng = StdRng::seed_from_u64(0);
         let mut x: Vec<f32> = (0..100).map(|_| rng.gen()).collect();
@@ -358,15 +360,15 @@ mod tests {
             .collect();
         let mut ts = TimeSeries::new(&x[..], &y[..], None);
         let desired = [period];
-        let actual = [fe.eval(&mut ts).unwrap()[0]]; // Test period only
+        let actual = [periodogram.eval(&mut ts).unwrap()[0]]; // Test period only
         all_close(&desired[..], &actual[..], 5e-3);
     }
 
     #[test]
     fn periodogram_one_peak_vs_two_peaks() {
-        let fe = FeatureExtractor::new(vec![
-            Box::new(Periodogram::new(1)),
-            Box::new(Periodogram::new(2)),
+        let fe = FeatureExtractor::<_, Periodogram<_, Feature<_>>>::new(vec![
+            Periodogram::new(1),
+            Periodogram::new(2),
         ]);
         let period = 0.17;
         let mut rng = StdRng::seed_from_u64(0);
@@ -387,7 +389,7 @@ mod tests {
 
     #[test]
     fn periodogram_unevenly_sinus_cosine() {
-        let fe = FeatureExtractor::new(vec![Box::new(Periodogram::new(2))]);
+        let periodogram: Periodogram<_, Feature<_>> = Periodogram::new(2);
         let period1 = 0.0753;
         let period2 = 0.45;
         let mut rng = StdRng::seed_from_u64(0);
@@ -403,7 +405,7 @@ mod tests {
             .collect();
         let mut ts = TimeSeries::new(&x[..], &y[..], None);
         let desired = [period2, period1];
-        let features = fe.eval(&mut ts).unwrap();
+        let features = periodogram.eval(&mut ts).unwrap();
         let actual = [features[0], features[2]]; // Test period only
         all_close(&desired[..], &actual[..], 1e-2);
         assert!(features[1] > features[3]);
@@ -411,7 +413,7 @@ mod tests {
 
     #[test]
     fn periodogram_unevenly_sinus_cosine_noised() {
-        let fe = FeatureExtractor::new(vec![Box::new(Periodogram::new(2))]);
+        let periodogram: Periodogram<_, Feature<_>> = Periodogram::new(2);
         let period1 = 0.0753;
         let period2 = 0.46;
         let mut rng = StdRng::seed_from_u64(0);
@@ -428,7 +430,7 @@ mod tests {
             .collect();
         let mut ts = TimeSeries::new(&x[..], &y[..], None);
         let desired = [period2, period1];
-        let features = fe.eval(&mut ts).unwrap();
+        let features = periodogram.eval(&mut ts).unwrap();
         let actual = [features[0], features[2]]; // Test period only
         all_close(&desired[..], &actual[..], 1e-2);
         assert!(features[1] > features[3]);
@@ -436,13 +438,12 @@ mod tests {
 
     #[test]
     fn periodogram_different_time_scales() {
-        let mut periodogram = Periodogram::new(2);
+        let mut periodogram: Periodogram<_, Feature<_>> = Periodogram::new(2);
         periodogram
             .set_nyquist(Box::new(QuantileNyquistFreq { quantile: 0.05 }))
             .set_freq_resolution(10.0)
             .set_max_freq_factor(1.0)
             .set_periodogram_algorithm(Box::new(PeriodogramPowerFft::new()));
-        let fe = FeatureExtractor::new(vec![Box::new(periodogram)]);
         let period1 = 0.01;
         let period2 = 1.0;
         let n = 100;
@@ -457,7 +458,7 @@ mod tests {
             })
             .collect();
         let mut ts = TimeSeries::new(&x, &y, None);
-        let features = fe.eval(&mut ts).unwrap();
+        let features = periodogram.eval(&mut ts).unwrap();
         assert!(f32::abs(features[0] - period2) / period2 < 1.0 / n as f32);
         assert!(f32::abs(features[2] - period1) / period1 < 1.0 / n as f32);
         assert!(features[1] > features[3]);

@@ -69,7 +69,7 @@ mod tests {
 
     feature_test!(
         maximum_time_interval,
-        [Box::new(MaximumTimeInterval::new())],
+        [MaximumTimeInterval::new()],
         [9.0],
         [0.0_f32, 0.5, 0.6, 1.6, 10.6],
     );

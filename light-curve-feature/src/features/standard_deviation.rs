@@ -66,7 +66,7 @@ mod tests {
 
     feature_test!(
         standard_deviation,
-        [Box::new(StandardDeviation::new())],
+        [StandardDeviation::new()],
         [1.5811388300841898],
         [0.0_f32, 1.0, 2.0, 3.0, 4.0],
     );

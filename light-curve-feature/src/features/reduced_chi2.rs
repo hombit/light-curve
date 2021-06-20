@@ -65,7 +65,7 @@ mod tests {
 
     feature_test!(
         reduced_chi2,
-        [Box::new(ReducedChi2::default())],
+        [ReducedChi2::default()],
         [2.192592592592593],
         [0.0_f64; 10], // isn't used
         [1.0, 2.0, 1.0, 0.0, -1.0, 0.0, 1.0, 2.0, -2.0, 0.0],

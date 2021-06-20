@@ -62,7 +62,7 @@ mod tests {
 
     feature_test!(
         mean,
-        [Box::new(Mean::new())],
+        [Mean::new()],
         [14.0],
         [1.0_f32, 1.0, 1.0, 1.0, 5.0, 6.0, 6.0, 6.0, 99.0],
     );

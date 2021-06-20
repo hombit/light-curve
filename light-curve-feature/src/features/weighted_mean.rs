@@ -62,7 +62,7 @@ mod tests {
 
     feature_test!(
         weighted_mean,
-        [Box::new(WeightedMean::new())],
+        [WeightedMean::new()],
         [1.1777777777777778],
         [1.0; 5], // isn't used
         [0.0_f32, 1.0, 2.0, 3.0, 4.0],

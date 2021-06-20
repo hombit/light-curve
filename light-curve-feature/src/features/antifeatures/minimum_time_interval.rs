@@ -69,7 +69,7 @@ mod tests {
 
     feature_test!(
         minimum_time_interval,
-        [Box::new(MinimumTimeInterval::new())],
+        [MinimumTimeInterval::new()],
         [0.1],
         [0.0_f32, 0.5, 0.6, 1.6, 10.6],
     );

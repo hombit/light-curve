@@ -1,5 +1,7 @@
 pub use crate::extractor::FeatureExtractor;
+pub use crate::feature::Feature;
 pub use crate::float_trait::Float;
+
 pub use light_curve_common::{all_close, linspace};
 pub use rand::prelude::*;
 pub use rand_distr::StandardNormal;
@@ -52,15 +54,15 @@ macro_rules! eval_info_test {
             let m1 = randvec::<f64>(&mut rng, N);
             let w1 = positive_randvec::<f64>(&mut rng, N);
 
-            let eval: Box<dyn FeatureEvaluator<f64>> = Box::new($eval);
-            let size_hint = eval.size_hint();
+            let eval: Feature<f64> = $eval.into();
+            let size_hint = FeatureEvaluator::<f64>::size_hint(&eval);
             assert_eq!(
-                eval.get_names().len(),
+                FeatureEvaluator::<f64>::get_names(&eval).len(),
                 size_hint,
                 "names vector has a wrong size"
             );
             assert_eq!(
-                eval.get_descriptions().len(),
+                FeatureEvaluator::<f64>::get_descriptions(&eval).len(),
                 size_hint,
                 "description vector has a wrong size"
             );
@@ -72,7 +74,7 @@ macro_rules! eval_info_test {
                 .unwrap();
             check_size(&baseline);
 
-            let min_ts_length = eval.min_ts_length();
+            let min_ts_length = FeatureEvaluator::<f64>::min_ts_length(&eval);
             for n in (0..10) {
                 let mut ts = TimeSeries::new(&t1_sorted[..n], &m1[..n], Some(&w1[..n]));
                 let result = eval.eval(&mut ts);
@@ -102,14 +104,14 @@ macro_rules! eval_info_test {
                 let neq_baseline = !simeq(&v, &baseline, 1e-12);
                 assert_eq!(
                     neq_baseline,
-                    eval.is_t_required(),
+                    FeatureEvaluator::<f64>::is_t_required(&eval),
                     "is_t_required() returns wrong value, \
                     v != baseline: {} ({:?} <=> {:?}), \
                     is_t_required(): {}",
                     neq_baseline,
                     v,
                     baseline,
-                    eval.is_t_required(),
+                    FeatureEvaluator::<f64>::is_t_required(&eval),
                 );
             }
 
@@ -124,14 +126,14 @@ macro_rules! eval_info_test {
                 let neq_baseline = !simeq(&v, &baseline, 1e-12);
                 assert_eq!(
                     neq_baseline,
-                    eval.is_m_required(),
+                    FeatureEvaluator::<f64>::is_m_required(&eval),
                     "is_m_required() returns wrong value, \
                     v != baseline: {} ({:?} <=> {:?}), \
                     is_m_required(): {}",
                     neq_baseline,
                     v,
                     baseline,
-                    eval.is_m_required(),
+                    FeatureEvaluator::<f64>::is_m_required(&eval),
                 );
             }
 
@@ -145,12 +147,12 @@ macro_rules! eval_info_test {
                 let neq_baseline = !simeq(&v, &baseline, 1e-12);
                 assert_eq!(
                     neq_baseline,
-                    eval.is_w_required(),
+                    FeatureEvaluator::<f64>::is_w_required(&eval),
                     "is_w_required() returns wrong value, \
                     v != baseline: {}, \
                     is_w_required(): {}",
                     neq_baseline,
-                    eval.is_w_required(),
+                    FeatureEvaluator::<f64>::is_w_required(&eval),
                 );
             }
 
@@ -166,14 +168,14 @@ macro_rules! eval_info_test {
                 let neq_baseline = !simeq(&v, &baseline, 1e-12);
                 assert_eq!(
                     neq_baseline,
-                    eval.is_sorting_required(),
+                    FeatureEvaluator::<f64>::is_sorting_required(&eval),
                     "is_sorting_required() returns wrong value, \
                     unsorted result: {:?}, \
                     sorted result: {:?}, \
                     is_sorting_required: {}",
                     v,
                     baseline,
-                    eval.is_sorting_required()
+                    FeatureEvaluator::<f64>::is_sorting_required(&eval),
                 );
             }
         }

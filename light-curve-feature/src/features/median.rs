@@ -59,10 +59,5 @@ mod tests {
 
     eval_info_test!(median_info, Median::default());
 
-    feature_test!(
-        median,
-        [Box::new(Median::new())],
-        [3.0],
-        [-99.0, 0.0, 3.0, 3.1, 3.2],
-    );
+    feature_test!(median, [Median::new()], [3.0], [-99.0, 0.0, 3.0, 3.1, 3.2],);
 }

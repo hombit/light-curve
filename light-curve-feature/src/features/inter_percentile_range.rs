@@ -98,9 +98,9 @@ mod tests {
     feature_test!(
         inter_percentile_range,
         [
-            Box::new(InterPercentileRange::default()),
-            Box::new(InterPercentileRange::new(0.25)), // should be the same
-            Box::new(InterPercentileRange::new(0.1)),
+            InterPercentileRange::default(),
+            InterPercentileRange::new(0.25), // should be the same
+            InterPercentileRange::new(0.1),
         ],
         [50.0, 50.0, 80.0],
         linspace(0.0, 99.0, 100),

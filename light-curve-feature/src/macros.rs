@@ -23,23 +23,6 @@ macro_rules! lazy_info {
     };
 }
 
-/// Constructs a `FeatureExtractor` object from a list of objects that implement `FeatureEvaluator`
-/// ```
-/// use light_curve_feature::*;
-///
-/// let fe = feat_extr!(BeyondNStd::new(1.0), Cusum::default());
-/// ```
-#[macro_export]
-macro_rules! feat_extr{
-    ( $( $x: expr ),* $(,)? ) => {
-        FeatureExtractor::new(
-            vec![$(
-                Box::new($x),
-            )*]
-        )
-    }
-}
-
 /// Helper for FeatureEvaluator implementations using time-series transformation.
 /// You must implement:
 /// - method `transform_ts(ts: &mut TimeSeries<T>) -> TMWVectors<T>`

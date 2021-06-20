@@ -117,9 +117,9 @@ mod tests {
     feature_test!(
         median_buffer_range_percentage,
         [
-            Box::new(MedianBufferRangePercentage::default()),
-            Box::new(MedianBufferRangePercentage::new(0.1)), // should be the same
-            Box::new(MedianBufferRangePercentage::new(0.2)),
+            MedianBufferRangePercentage::default(),
+            MedianBufferRangePercentage::new(0.1), // should be the same
+            MedianBufferRangePercentage::new(0.2),
         ],
         [0.5555555555555556, 0.5555555555555556, 0.7777777777777778],
         [1.0_f32, 41.0, 49.0, 49.0, 50.0, 51.0, 52.0, 58.0, 100.0],
@@ -127,7 +127,7 @@ mod tests {
 
     feature_test!(
         median_buffer_range_percentage_plateau,
-        [Box::new(MedianBufferRangePercentage::default())],
+        [MedianBufferRangePercentage::default()],
         [0.0],
         [0.0; 10],
     );

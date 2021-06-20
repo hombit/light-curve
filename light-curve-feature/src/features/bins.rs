@@ -26,18 +26,23 @@ use unzip3::Unzip3;
 /// - Minimum number of observations: **1** (or as required by sub-features)
 /// - Number of features: **$...$**
 #[derive(Clone, Debug)]
-pub struct Bins<T: Float> {
+pub struct Bins<T, F>
+where
+    T: Float,
+    F: FeatureEvaluator<T>,
+{
     window: T,
     offset: T,
     info: EvaluatorInfo,
     feature_names: Vec<String>,
     feature_descriptions: Vec<String>,
-    feature_extractor: FeatureExtractor<T>,
+    feature_extractor: FeatureExtractor<T, F>,
 }
 
-impl<T> Bins<T>
+impl<T, F> Bins<T, F>
 where
     T: Float,
+    F: FeatureEvaluator<T>,
 {
     pub fn new(window: T, offset: T) -> Self {
         assert!(window.is_sign_positive(), "window must be positive");
@@ -54,7 +59,7 @@ where
             },
             feature_names: vec![],
             feature_descriptions: vec![],
-            feature_extractor: feat_extr!(),
+            feature_extractor: FeatureExtractor::new(vec![]),
         }
     }
 
@@ -70,7 +75,7 @@ where
     }
 
     /// Extend a feature to extract from binned time series
-    pub fn add_feature(&mut self, feature: Box<dyn FeatureEvaluator<T>>) -> &mut Self {
+    pub fn add_feature(&mut self, feature: F) -> &mut Self {
         let window = self.window;
         let offset = self.offset;
         self.info.size += feature.size_hint();
@@ -124,18 +129,20 @@ where
     }
 }
 
-impl<T> Default for Bins<T>
+impl<T, F> Default for Bins<T, F>
 where
     T: Float,
+    F: FeatureEvaluator<T>,
 {
     fn default() -> Self {
         Self::new(Self::default_window(), Self::default_offset())
     }
 }
 
-impl<T> FeatureEvaluator<T> for Bins<T>
+impl<T, F> FeatureEvaluator<T> for Bins<T, F>
 where
     T: Float,
+    F: FeatureEvaluator<T>,
 {
     transformer_eval!();
 }
@@ -150,7 +157,7 @@ mod tests {
 
     eval_info_test!(bins_info, {
         let mut bins = Bins::default();
-        bins.add_feature(Box::new(Amplitude::default()));
+        bins.add_feature(Amplitude::default().into());
         bins
     });
 
@@ -165,7 +172,7 @@ mod tests {
         let desired_m = [0.0, 2.0, 6.333333333333333, 10.0];
         let desired_w = [10.0, 6.666666666666667, 7.5, 10.0];
 
-        let bins = Bins::new(1.0, 0.0);
+        let bins: Bins<_, Feature<_>> = Bins::new(1.0, 0.0);
         let actual_tmw = bins.transform_ts(&mut ts).unwrap();
 
         assert_eq!(actual_tmw.t.len(), actual_tmw.m.len());
@@ -182,7 +189,9 @@ mod tests {
         let mut ts = TimeSeries::new(&t, &m, None);
 
         let mut len = |window, offset| {
-            let tmw = Bins::new(window, offset).transform_ts(&mut ts).unwrap();
+            let tmw = Bins::<_, Feature<_>>::new(window, offset)
+                .transform_ts(&mut ts)
+                .unwrap();
             assert_eq!(tmw.t.len(), tmw.m.len());
             assert_eq!(tmw.m.len(), tmw.w.as_ref().unwrap().len());
             tmw.t.len()

@@ -128,10 +128,10 @@ mod tests {
     feature_test!(
         magnitude_percentage_ratio,
         [
-            Box::new(MagnitudePercentageRatio::default()),
-            Box::new(MagnitudePercentageRatio::new(0.4, 0.05)), // should be the same
-            Box::new(MagnitudePercentageRatio::new(0.2, 0.05)),
-            Box::new(MagnitudePercentageRatio::new(0.4, 0.1)),
+            MagnitudePercentageRatio::default(),
+            MagnitudePercentageRatio::new(0.4, 0.05), // should be the same
+            MagnitudePercentageRatio::new(0.2, 0.05),
+            MagnitudePercentageRatio::new(0.4, 0.1),
         ],
         [0.12886598, 0.12886598, 0.7628866, 0.13586957],
         [
@@ -142,9 +142,9 @@ mod tests {
 
     #[test]
     fn magnitude_percentage_ratio_plateau() {
-        let fe = feat_extr!(MagnitudePercentageRatio::default());
+        let eval = MagnitudePercentageRatio::default();
         let x = [0.0; 10];
         let mut ts = TimeSeries::new(&x, &x, None);
-        assert_eq!(fe.eval(&mut ts), Err(EvaluatorError::FlatTimeSeries));
+        assert_eq!(eval.eval(&mut ts), Err(EvaluatorError::FlatTimeSeries));
     }
 }

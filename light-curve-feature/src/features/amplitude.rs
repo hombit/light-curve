@@ -12,11 +12,11 @@ use crate::evaluator::*;
 /// ```
 /// use light_curve_feature::*;
 ///
-/// let fe = feat_extr!(Amplitude::default());
+/// let amplitude = Amplitude::default();
 /// let time = [0.0, 1.0];  // Doesn't depend on time
 /// let magn = [0.0, 2.0];
 /// let mut ts = TimeSeries::new(&time[..], &magn[..], None);
-/// assert_eq!(vec![1.0], fe.eval(&mut ts).unwrap());
+/// assert_eq!(vec![1.0], amplitude.eval(&mut ts).unwrap());
 /// ```
 #[derive(Clone, Default, Debug)]
 pub struct Amplitude {}
@@ -68,10 +68,5 @@ mod tests {
 
     eval_info_test!(amplitude_info, Amplitude::default());
 
-    feature_test!(
-        amplitude,
-        [Box::new(Amplitude::new())],
-        [1.0],
-        [0.0_f32, 1.0, 2.0],
-    );
+    feature_test!(amplitude, [Amplitude::new()], [1.0], [0.0_f32, 1.0, 2.0],);
 }

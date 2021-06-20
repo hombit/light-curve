@@ -1,3 +1,5 @@
+pub mod antifeatures;
+
 mod amplitude;
 pub use amplitude::Amplitude;
 
@@ -68,6 +70,7 @@ pub use percent_difference_magnitude_percentile::PercentDifferenceMagnitudePerce
 
 mod periodogram;
 pub use periodogram::Periodogram;
+pub use periodogram::PeriodogramPeaks as _PeriodogramPeaks;
 
 mod reduced_chi2;
 pub use reduced_chi2::ReducedChi2;

@@ -64,7 +64,7 @@ mod tests {
 
     feature_test!(
         time_standard_deviation,
-        [Box::new(TimeStandardDeviation::new())],
+        [TimeStandardDeviation::new()],
         [1.5811388300841898],
         [0.0_f32, 1.0, 2.0, 3.0, 4.0],
     );

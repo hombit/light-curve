@@ -78,7 +78,7 @@ mod tests {
 
     feature_test!(
         kurtosis,
-        [Box::new(Kurtosis::new())],
+        [Kurtosis::new()],
         [-1.2],
         [0.0_f32, 1.0, 2.0, 3.0, 4.0],
     );

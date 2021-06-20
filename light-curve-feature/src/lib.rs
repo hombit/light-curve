@@ -6,7 +6,7 @@
 //! use light_curve_feature::*;
 //!
 //! // Let's find amplitude and reduced Chi-squared of the light curve
-//! let fe = feat_extr!(Amplitude::default(), ReducedChi2::default());
+//! let fe = FeatureExtractor::<_, Feature<_>>::new(vec![Amplitude::default().into(), ReducedChi2::default().into()]);
 //! // Define light curve
 //! let time = [0.0, 1.0, 2.0, 3.0, 4.0];
 //! let magn = [-1.0, 2.0, 1.0, 3.0, 4.5];
@@ -26,16 +26,18 @@ pub mod tests;
 #[macro_use]
 mod macros;
 
-pub mod antifeatures;
-
 mod evaluator;
-pub use evaluator::{FeatureEvaluator, VecFe};
+pub use evaluator::FeatureEvaluator;
+pub use features::antifeatures;
 
 mod error;
 pub use error::EvaluatorError;
 
 mod extractor;
 pub use extractor::FeatureExtractor;
+
+pub mod feature;
+pub use feature::Feature;
 
 pub mod features;
 pub use features::*;

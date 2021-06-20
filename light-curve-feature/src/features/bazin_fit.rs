@@ -193,7 +193,7 @@ mod tests {
 
     feature_test!(
         bazin_fit_plateau,
-        [Box::new(BazinFit::default())],
+        [BazinFit::default()],
         [0.0, 0.0, 10.0, 5.0, 5.0, 0.0], // initial model parameters and zero chi2
         linspace(0.0, 10.0, 11),
         [0.0; 11],
@@ -221,8 +221,8 @@ mod tests {
         println!("{:?}\n{:?}\n{:?}\n{:?}", t, model, m, w);
         let mut ts = TimeSeries::new(&t, &m, Some(&w));
 
-        let fe = FeatureExtractor::new(vec![Box::new(BazinFit::default())]);
-        let values = fe.eval(&mut ts).unwrap();
+        let eval = BazinFit::default();
+        let values = eval.eval(&mut ts).unwrap();
 
         // curve_fit(lambda t, a, b, t0, rise, fall: b + a * np.exp(-(t-t0)/fall) / (1 + np.exp(-(t-t0) / rise)), xdata=t, ydata=m, sigma=np.array(w)**-0.5, p0=[1e4, 1e3, 30, 10, 30])
         let desired = [

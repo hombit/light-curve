@@ -2,7 +2,7 @@ pub use crate::error::EvaluatorError;
 pub use crate::float_trait::Float;
 pub use crate::time_series::TimeSeries;
 
-use dyn_clonable::*;
+use enum_dispatch::enum_dispatch;
 pub use lazy_static::lazy_static;
 pub use std::fmt::Debug;
 
@@ -17,7 +17,7 @@ pub struct EvaluatorInfo {
 }
 
 /// The trait each feature should implement
-#[clonable]
+#[enum_dispatch]
 pub trait FeatureEvaluator<T: Float>: Send + Clone + Debug {
     /// Should return the vector of feature values or `EvaluatorError`
     fn eval(&self, ts: &mut TimeSeries<T>) -> Result<Vec<T>, EvaluatorError>;
@@ -79,8 +79,6 @@ pub trait FeatureEvaluator<T: Float>: Send + Clone + Debug {
         }
     }
 }
-
-pub type VecFe<T> = Vec<Box<dyn FeatureEvaluator<T>>>;
 
 pub fn get_nonzero_m_std<T: Float>(ts: &mut TimeSeries<T>) -> Result<T, EvaluatorError> {
     let std = ts.m.get_std();

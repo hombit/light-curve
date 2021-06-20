@@ -1,52 +1,52 @@
 use crate::evaluator::*;
 
-/// Mean time
+/// Number of observations
 ///
 /// $$
-/// \langle t \rangle \equiv \frac1{N} \sum_i {t_i}.
+/// N
 /// $$
 ///
-/// - Depends on: **time**
-/// - Minimum number of observations: **1**
+/// - Depends on: nothing
+/// - Minimum number of observations: **0**
 /// - Number of features: **1**
 #[derive(Clone, Default, Debug)]
-pub struct TimeMean {}
+pub struct ObservationCount {}
 
-impl TimeMean {
+impl ObservationCount {
     pub fn new() -> Self {
         Self {}
     }
 }
 
 lazy_info!(
-    TIME_MEAN_INFO,
+    OBSERVATION_COUNT_INFO,
     size: 1,
-    min_ts_length: 1,
-    t_required: true,
+    min_ts_length: 0,
+    t_required: false,
     m_required: false,
     w_required: false,
     sorting_required: false,
 );
 
-impl<T> FeatureEvaluator<T> for TimeMean
+impl<T> FeatureEvaluator<T> for ObservationCount
 where
     T: Float,
 {
     fn eval(&self, ts: &mut TimeSeries<T>) -> Result<Vec<T>, EvaluatorError> {
         self.check_ts_length(ts)?;
-        Ok(vec![ts.t.get_mean()])
+        Ok(vec![ts.lenf()])
     }
 
     fn get_info(&self) -> &EvaluatorInfo {
-        &TIME_MEAN_INFO
+        &OBSERVATION_COUNT_INFO
     }
 
     fn get_names(&self) -> Vec<&str> {
-        vec!["ANTIFEATURE_time_mean"]
+        vec!["ANTIFEATURE_observation_count"]
     }
 
     fn get_descriptions(&self) -> Vec<&str> {
-        vec!["mean of time moments"]
+        vec!["observation count"]
     }
 }
 
@@ -57,12 +57,12 @@ mod tests {
     use super::*;
     use crate::tests::*;
 
-    eval_info_test!(time_mean_info, TimeMean::default());
+    eval_info_test!(observation_count_info, ObservationCount::default());
 
     feature_test!(
-        time_mean,
-        [Box::new(TimeMean::new())],
-        [14.0],
-        [1.0_f32, 1.0, 1.0, 1.0, 5.0, 6.0, 6.0, 6.0, 99.0],
+        observation_count,
+        [ObservationCount::new()],
+        [5.0],
+        [0.0_f32, 1.0, 2.0, 3.0, 4.0],
     );
 }

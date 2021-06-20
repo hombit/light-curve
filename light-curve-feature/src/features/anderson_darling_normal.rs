@@ -92,7 +92,7 @@ mod tests {
 
     feature_test!(
         anderson_darling_normal,
-        [Box::new(AndersonDarlingNormal::new())],
+        [AndersonDarlingNormal::new()],
         // import numpy as np
         // from scipy.stats import anderson
         // a = np.linspace(0.0, 1.0, 101)

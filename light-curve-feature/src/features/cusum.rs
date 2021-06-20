@@ -83,7 +83,7 @@ mod tests {
 
     feature_test!(
         cumsum,
-        [Box::new(Cusum::new())],
+        [Cusum::new()],
         [0.3589213],
         [1.0_f32, 1.0, 1.0, 5.0, 8.0, 20.0],
     );

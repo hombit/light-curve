@@ -71,7 +71,7 @@ mod tests {
 
     feature_test!(
         maximum_slope_positive,
-        [Box::new(MaximumSlope::new())],
+        [MaximumSlope::new()],
         [1.0],
         [0.0_f32, 2.0, 4.0, 5.0, 7.0, 9.0],
         [0.0_f32, 1.0, 2.0, 3.0, 4.0, 5.0],
@@ -79,7 +79,7 @@ mod tests {
 
     feature_test!(
         maximum_slope_negative,
-        [Box::new(MaximumSlope::new())],
+        [MaximumSlope::new()],
         [1.0],
         [0.0_f32, 1.0, 2.0, 3.0, 4.0, 5.0],
         [0.0_f32, 0.5, 1.0, 0.0, 0.5, 1.0],
