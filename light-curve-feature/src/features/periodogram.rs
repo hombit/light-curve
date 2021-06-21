@@ -20,46 +20,49 @@ fn number_ending(i: usize) -> &'static str {
 /// Peak evaluator for `Periodogram`
 #[derive(Clone, Debug)]
 pub struct PeriodogramPeaks {
-    info: Box<EvaluatorInfo>,
+    properties: Box<EvaluatorProperties>,
     peaks: usize,
-    names: Vec<String>,
-    descriptions: Vec<String>,
 }
 
 impl PeriodogramPeaks {
     fn new(peaks: usize) -> Self {
         assert!(peaks > 0, "Number of peaks should be at least one");
+        let info = EvaluatorInfo {
+            size: 2 * peaks,
+            min_ts_length: 1,
+            t_required: true,
+            m_required: true,
+            w_required: false,
+            sorting_required: true,
+        };
+        let names = (0..peaks)
+            .flat_map(|i| vec![format!("period_{}", i), format!("period_s_to_n_{}", i)])
+            .collect();
+        let descriptions = (0..peaks)
+            .flat_map(|i| {
+                vec![
+                    format!(
+                        "period of the {}{} highest peak of periodogram",
+                        i + 1,
+                        number_ending(i + 1),
+                    ),
+                    format!(
+                        "Spectral density to spectral density standard deviation ratio of \
+                            the {}{} highest peak of periodogram",
+                        i + 1,
+                        number_ending(i + 1)
+                    ),
+                ]
+            })
+            .collect();
         Self {
-            info: EvaluatorInfo {
-                size: 2 * peaks,
-                min_ts_length: 1,
-                t_required: true,
-                m_required: true,
-                w_required: false,
-                sorting_required: true,
+            properties: EvaluatorProperties {
+                info,
+                names,
+                descriptions,
             }
             .into(),
             peaks,
-            names: (0..peaks)
-                .flat_map(|i| vec![format!("period_{}", i), format!("period_s_to_n_{}", i)])
-                .collect(),
-            descriptions: (0..peaks)
-                .flat_map(|i| {
-                    vec![
-                        format!(
-                            "period of the {}{} highest peak of periodogram",
-                            i + 1,
-                            number_ending(i + 1),
-                        ),
-                        format!(
-                            "Spectral density to spectral density standard deviation ratio of \
-                            the {}{} highest peak of periodogram",
-                            i + 1,
-                            number_ending(i + 1)
-                        ),
-                    ]
-                })
-                .collect(),
         }
     }
 
@@ -96,15 +99,23 @@ where
     }
 
     fn get_info(&self) -> &EvaluatorInfo {
-        &self.info
+        &self.properties.info
     }
 
     fn get_names(&self) -> Vec<&str> {
-        self.names.iter().map(|name| name.as_str()).collect()
+        self.properties
+            .names
+            .iter()
+            .map(|name| name.as_str())
+            .collect()
     }
 
     fn get_descriptions(&self) -> Vec<&str> {
-        self.descriptions.iter().map(|desc| desc.as_str()).collect()
+        self.properties
+            .descriptions
+            .iter()
+            .map(|desc| desc.as_str())
+            .collect()
     }
 }
 
@@ -132,13 +143,11 @@ where
     T: Float,
     F: FeatureEvaluator<T>,
 {
-    info: Box<EvaluatorInfo>,
+    properties: Box<EvaluatorProperties>,
     resolution: f32,
     max_freq_factor: f32,
     nyquist: Box<dyn NyquistFreq<T>>,
     feature_extractor: FeatureExtractor<T, F>,
-    feature_names: Vec<String>,
-    feature_descriptions: Vec<String>,
     periodogram_algorithm: Box<dyn PeriodogramPower<T>>,
 }
 
@@ -165,26 +174,29 @@ where
     /// New [Periodogram] that finds given number of peaks
     pub fn new(peaks: usize) -> Self {
         let peaks = PeriodogramPeaks::new(peaks);
-        let peak_names = peaks.names.clone();
-        let peak_descriptions = peaks.descriptions.clone();
+        let peak_names = peaks.properties.names.clone();
+        let peak_descriptions = peaks.properties.descriptions.clone();
         let peaks_size_hint = FeatureEvaluator::<T>::size_hint(&peaks);
         let peaks_min_ts_length = FeatureEvaluator::<T>::min_ts_length(&peaks);
+        let info = EvaluatorInfo {
+            size: peaks_size_hint,
+            min_ts_length: usize::max(peaks_min_ts_length, 2),
+            t_required: true,
+            m_required: true,
+            w_required: false,
+            sorting_required: true,
+        };
         Self {
-            info: EvaluatorInfo {
-                size: peaks_size_hint,
-                min_ts_length: usize::max(peaks_min_ts_length, 2),
-                t_required: true,
-                m_required: true,
-                w_required: false,
-                sorting_required: true,
+            properties: EvaluatorProperties {
+                info,
+                names: peak_names,
+                descriptions: peak_descriptions,
             }
             .into(),
             resolution: Self::default_resolution(),
             max_freq_factor: Self::default_max_freq_factor(),
             nyquist: Box::new(AverageNyquistFreq),
             feature_extractor: FeatureExtractor::new(vec![peaks.into()]),
-            feature_names: peak_names,
-            feature_descriptions: peak_descriptions,
             periodogram_algorithm: Box::new(PeriodogramPowerFft::new()),
         }
     }
@@ -215,14 +227,14 @@ where
 
     /// Extend a feature to extract from periodogram
     pub fn add_feature(&mut self, feature: F) -> &mut Self {
-        self.info.size += feature.size_hint();
-        self.feature_names.extend(
+        self.properties.info.size += feature.size_hint();
+        self.properties.names.extend(
             feature
                 .get_names()
                 .iter()
                 .map(|name| "periodogram_".to_owned() + name),
         );
-        self.feature_descriptions.extend(
+        self.properties.descriptions.extend(
             feature
                 .get_descriptions()
                 .into_iter()

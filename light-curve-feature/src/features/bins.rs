@@ -31,11 +31,9 @@ where
     T: Float,
     F: FeatureEvaluator<T>,
 {
+    properties: Box<EvaluatorProperties>,
     window: T,
     offset: T,
-    info: Box<EvaluatorInfo>,
-    feature_names: Vec<String>,
-    feature_descriptions: Vec<String>,
     feature_extractor: FeatureExtractor<T, F>,
 }
 
@@ -46,20 +44,23 @@ where
 {
     pub fn new(window: T, offset: T) -> Self {
         assert!(window.is_sign_positive(), "window must be positive");
+        let info = EvaluatorInfo {
+            size: 0,
+            min_ts_length: 1,
+            t_required: true,
+            m_required: true,
+            w_required: true,
+            sorting_required: true,
+        };
         Self {
-            window,
-            offset,
-            info: EvaluatorInfo {
-                size: 0,
-                min_ts_length: 1,
-                t_required: true,
-                m_required: true,
-                w_required: true,
-                sorting_required: true,
+            properties: EvaluatorProperties {
+                info,
+                names: vec![],
+                descriptions: vec![],
             }
             .into(),
-            feature_names: vec![],
-            feature_descriptions: vec![],
+            window,
+            offset,
             feature_extractor: FeatureExtractor::new(vec![]),
         }
     }
@@ -79,14 +80,15 @@ where
     pub fn add_feature(&mut self, feature: F) -> &mut Self {
         let window = self.window;
         let offset = self.offset;
-        self.info.size += feature.size_hint();
-        self.feature_names.extend(
+        self.properties.info.size += feature.size_hint();
+        self.properties.names.extend(
             feature
                 .get_names()
                 .iter()
                 .map(|name| format!("bins_window{:.1}_offset{:.1}_{}", window, offset, name)),
         );
-        self.feature_descriptions
+        self.properties
+            .descriptions
             .extend(feature.get_descriptions().iter().map(|desc| {
                 format!(
                     "{desc} for binned time-series with window {window} and offset {offset}",

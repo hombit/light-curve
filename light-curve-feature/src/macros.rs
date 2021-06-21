@@ -26,9 +26,7 @@ macro_rules! lazy_info {
 /// Helper for FeatureEvaluator implementations using time-series transformation.
 /// You must implement:
 /// - method `transform_ts(ts: &mut TimeSeries<T>) -> TMWVectors<T>`
-/// - attribute `info: EvaluatorInfo`
-/// - attribute `feature_names: Vec<String>`
-/// - attribute `feature_descriptions: Vec<String>`
+/// - attribute `properties: Box<EvaluatorProperties>`
 #[macro_export]
 macro_rules! transformer_eval {
     () => {
@@ -48,18 +46,20 @@ macro_rules! transformer_eval {
         }
 
         fn get_info(&self) -> &EvaluatorInfo {
-            &self.info
+            &self.properties.info
         }
 
         fn get_names(&self) -> Vec<&str> {
-            self.feature_names
+            self.properties
+                .names
                 .iter()
                 .map(|name| name.as_str())
                 .collect()
         }
 
         fn get_descriptions(&self) -> Vec<&str> {
-            self.feature_descriptions
+            self.properties
+                .descriptions
                 .iter()
                 .map(|desc| desc.as_str())
                 .collect()

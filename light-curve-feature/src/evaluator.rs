@@ -16,6 +16,13 @@ pub struct EvaluatorInfo {
     pub sorting_required: bool,
 }
 
+#[derive(Clone, Debug)]
+pub struct EvaluatorProperties {
+    pub info: EvaluatorInfo,
+    pub names: Vec<String>,
+    pub descriptions: Vec<String>,
+}
+
 /// The trait each feature should implement
 #[enum_dispatch]
 pub trait FeatureEvaluator<T: Float>: Send + Clone + Debug {
