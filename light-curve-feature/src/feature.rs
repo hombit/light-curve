@@ -15,14 +15,14 @@ where
     T: Float,
 {
     // extractor
-    FeatureExtractor(FeatureExtractor<T, Feature<T>>),
+    FeatureExtractor(FeatureExtractor<T, Self>),
     // features
     Amplitude,
     AndersonDarlingNormal,
     #[cfg(feature = "gsl")]
     BazinFit,
     BeyondNStd(BeyondNStd<T>),
-    Bins(Bins<T, Feature<T>>),
+    Bins(Bins<T, Self>),
     Cusum,
     Eta,
     EtaE,
@@ -40,7 +40,7 @@ where
     MedianBufferRangePercentage(MedianBufferRangePercentage<T>),
     PercentAmplitude,
     PercentDifferenceMagnitudePercentile,
-    Periodogram(Periodogram<T, Feature<T>>),
+    Periodogram(Periodogram<T, Self>),
     _PeriodogramPeaks,
     ReducedChi2,
     Skew,
