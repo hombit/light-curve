@@ -1,3 +1,4 @@
+use conv::ConvUtil;
 use criterion::{black_box, Criterion};
 use light_curve_feature::*;
 use rand::prelude::*;
@@ -39,6 +40,22 @@ where
         Box::new(WeightedMean::default()),
     ];
 
+    let observation_count_vec: Vec<_> = (0..20)
+        .map(|_| {
+            let f: Box<dyn FeatureEvaluator<T>> =
+                Box::new(antifeatures::ObservationCount::default());
+            f
+        })
+        .collect();
+
+    let beyond_n_std_vec: Vec<_> = (1..21)
+        .map(|i| {
+            let f: Box<dyn FeatureEvaluator<_>> =
+                Box::new(BeyondNStd::new(i.value_as::<T>().unwrap() / T::ten()));
+            f
+        })
+        .collect();
+
     let mut bins = Bins::default();
     bins.add_feature(Box::new(StetsonK::default()));
 
@@ -51,6 +68,14 @@ where
         .chain(std::iter::once((
             "all non-meta features",
             FeatureExtractor::new(features.clone()),
+        )))
+        .chain(std::iter::once((
+            "multiple ObservationCount",
+            FeatureExtractor::new(observation_count_vec),
+        )))
+        .chain(std::iter::once((
+            "multiple BeyondNStd",
+            FeatureExtractor::new(beyond_n_std_vec),
         )))
         .chain(std::iter::once((
             "Bins",
