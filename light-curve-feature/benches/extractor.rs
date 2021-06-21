@@ -12,52 +12,44 @@ where
 {
     const N: [usize; 2] = [100, 1000];
 
-    let features: Vec<Box<dyn FeatureEvaluator<_>>> = vec![
-        Box::new(Amplitude::default()),
-        Box::new(AndersonDarlingNormal::default()),
-        Box::new(BeyondNStd::default()),
-        Box::new(Cusum::default()),
-        Box::new(Eta::default()),
-        Box::new(EtaE::default()),
-        Box::new(ExcessVariance::default()),
-        Box::new(InterPercentileRange::default()),
-        Box::new(Kurtosis::default()),
-        Box::new(LinearFit::default()),
-        Box::new(LinearTrend::default()),
-        Box::new(MagnitudePercentageRatio::default()),
-        Box::new(MaximumSlope::default()),
-        Box::new(Mean::default()),
-        Box::new(MeanVariance::default()),
-        Box::new(Median::default()),
-        Box::new(MedianAbsoluteDeviation::default()),
-        Box::new(MedianBufferRangePercentage::default()),
-        Box::new(PercentAmplitude::default()),
-        Box::new(PercentDifferenceMagnitudePercentile::default()),
-        Box::new(ReducedChi2::default()),
-        Box::new(Skew::default()),
-        Box::new(StandardDeviation::default()),
-        Box::new(StetsonK::default()),
-        Box::new(WeightedMean::default()),
+    let features: Vec<Feature<_>> = vec![
+        Amplitude::default().into(),
+        AndersonDarlingNormal::default().into(),
+        BeyondNStd::default().into(),
+        Cusum::default().into(),
+        Eta::default().into(),
+        EtaE::default().into(),
+        ExcessVariance::default().into(),
+        InterPercentileRange::default().into(),
+        Kurtosis::default().into(),
+        LinearFit::default().into(),
+        LinearTrend::default().into(),
+        MagnitudePercentageRatio::default().into(),
+        MaximumSlope::default().into(),
+        Mean::default().into(),
+        MeanVariance::default().into(),
+        Median::default().into(),
+        MedianAbsoluteDeviation::default().into(),
+        MedianBufferRangePercentage::default().into(),
+        PercentAmplitude::default().into(),
+        PercentDifferenceMagnitudePercentile::default().into(),
+        ReducedChi2::default().into(),
+        Skew::default().into(),
+        StandardDeviation::default().into(),
+        StetsonK::default().into(),
+        WeightedMean::default().into(),
     ];
 
     let observation_count_vec: Vec<_> = (0..20)
-        .map(|_| {
-            let f: Box<dyn FeatureEvaluator<T>> =
-                Box::new(antifeatures::ObservationCount::default());
-            f
-        })
+        .map(|_| antifeatures::ObservationCount::default().into())
         .collect();
 
     let beyond_n_std_vec: Vec<_> = (1..21)
-        .map(|i| {
-            let f: Box<dyn FeatureEvaluator<_>> =
-                Box::new(BeyondNStd::new(i.value_as::<T>().unwrap() / T::ten()));
-            f
-        })
+        .map(|i| BeyondNStd::new(i.value_as::<T>().unwrap() / T::ten()).into())
         .collect();
 
     let mut bins = Bins::default();
-    bins.add_feature(Box::new(StetsonK::default()));
+    bins.add_feature(StetsonK::default().into());
 
     let mut periodogram = Periodogram::default();
     periodogram.set_max_freq_factor(10.0);
@@ -79,11 +71,11 @@ where
         )))
         .chain(std::iter::once((
             "Bins",
-            FeatureExtractor::new(vec![Box::new(bins)]),
+            FeatureExtractor::new(vec![bins.into()]),
         )))
         .chain(std::iter::once((
             "Periodogram",
-            FeatureExtractor::new(vec![Box::new(periodogram)]),
+            FeatureExtractor::new(vec![periodogram.into()]),
         )))
         .collect();
 
@@ -105,7 +97,7 @@ where
 }
 
 fn run<T: Float>(
-    fe: &FeatureExtractor<T>,
+    fe: &FeatureExtractor<T, Feature<T>>,
     x: &[T],
     y: &[T],
     err: &[T],
