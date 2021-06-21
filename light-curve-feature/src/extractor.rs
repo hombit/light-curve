@@ -12,7 +12,7 @@ where
     T: Float,
     F: FeatureEvaluator<T>,
 {
-    info: EvaluatorInfo,
+    info: Box<EvaluatorInfo>,
     features: Vec<F>,
     phantom: PhantomData<T>,
 }
@@ -34,7 +34,8 @@ where
             m_required: features.iter().any(|x| x.is_m_required()),
             w_required: features.iter().any(|x| x.is_w_required()),
             sorting_required: features.iter().any(|x| x.is_sorting_required()),
-        };
+        }
+        .into();
         Self {
             info,
             features,

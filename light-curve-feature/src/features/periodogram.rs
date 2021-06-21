@@ -20,7 +20,7 @@ fn number_ending(i: usize) -> &'static str {
 /// Peak evaluator for `Periodogram`
 #[derive(Clone, Debug)]
 pub struct PeriodogramPeaks {
-    info: EvaluatorInfo,
+    info: Box<EvaluatorInfo>,
     peaks: usize,
     names: Vec<String>,
     descriptions: Vec<String>,
@@ -37,7 +37,8 @@ impl PeriodogramPeaks {
                 m_required: true,
                 w_required: false,
                 sorting_required: true,
-            },
+            }
+            .into(),
             peaks,
             names: (0..peaks)
                 .flat_map(|i| vec![format!("period_{}", i), format!("period_s_to_n_{}", i)])
@@ -131,7 +132,7 @@ where
     T: Float,
     F: FeatureEvaluator<T>,
 {
-    info: EvaluatorInfo,
+    info: Box<EvaluatorInfo>,
     resolution: f32,
     max_freq_factor: f32,
     nyquist: Box<dyn NyquistFreq<T>>,
@@ -176,7 +177,8 @@ where
                 m_required: true,
                 w_required: false,
                 sorting_required: true,
-            },
+            }
+            .into(),
             resolution: Self::default_resolution(),
             max_freq_factor: Self::default_max_freq_factor(),
             nyquist: Box::new(AverageNyquistFreq),

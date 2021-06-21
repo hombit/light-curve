@@ -33,7 +33,7 @@ where
 {
     window: T,
     offset: T,
-    info: EvaluatorInfo,
+    info: Box<EvaluatorInfo>,
     feature_names: Vec<String>,
     feature_descriptions: Vec<String>,
     feature_extractor: FeatureExtractor<T, F>,
@@ -56,7 +56,8 @@ where
                 m_required: true,
                 w_required: true,
                 sorting_required: true,
-            },
+            }
+            .into(),
             feature_names: vec![],
             feature_descriptions: vec![],
             feature_extractor: FeatureExtractor::new(vec![]),
