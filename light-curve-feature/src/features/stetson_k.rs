@@ -1,5 +1,7 @@
 use crate::evaluator::*;
 
+use ndarray::Zip;
+
 /// Stetson $K$ coefficient described light curve shape
 ///
 /// $$
@@ -41,10 +43,9 @@ where
         self.check_ts_length(ts)?;
         let chi2 = get_nonzero_reduced_chi2(ts)? * (ts.lenf() - T::one());
         let mean = ts.get_m_weighted_mean();
-        let value = ts
-            .mw_iter()
-            .map(|(y, w)| T::abs(y - mean) * T::sqrt(w))
-            .sum::<T>()
+        let value = Zip::from(&ts.m.sample)
+            .and(&ts.w.sample)
+            .fold(T::zero(), |acc, &y, &w| acc + T::abs(y - mean) * T::sqrt(w))
             / T::sqrt(ts.lenf() * chi2);
         Ok(vec![value])
     }
@@ -87,7 +88,7 @@ mod tests {
                 }
             })
             .collect::<Vec<_>>(),
-        Some(&[1.0; 1000]),
+        [1.0; 1000],
     );
 
     // Slow convergence, use high tol
@@ -100,7 +101,7 @@ mod tests {
             .iter()
             .map(|&x| f64::sin(x))
             .collect::<Vec<_>>(),
-        None,
+        [1.0; 1000],
         1e-3,
     );
 
@@ -110,7 +111,6 @@ mod tests {
         [12_f64.sqrt() / 4.0],
         [1.0; 1000], // isn't used
         linspace(0.0, 1.0, 1000),
-        None,
     );
 
     // It seems that Stetson (1996) formula for this case is wrong by the factor of 2 * sqrt((N-1) / N)
@@ -128,14 +128,13 @@ mod tests {
                 }
             })
             .collect::<Vec<_>>(),
-        None,
     );
 
     #[test]
     fn stetson_k_plateau() {
         let fe = feat_extr!(StetsonK::new());
         let x = [0.0; 10];
-        let mut ts = TimeSeries::new(&x, &x, None);
+        let mut ts = TimeSeries::new_without_weight(&x, &x);
         assert_eq!(fe.eval(&mut ts), Err(EvaluatorError::FlatTimeSeries));
     }
 }

@@ -16,8 +16,8 @@ use periodogram::bench_periodogram;
 mod recurrent_sin_cos;
 use recurrent_sin_cos::bench_recurrent_sin_cos;
 
-mod statistics;
-use statistics::bench_peak_indices;
+mod peak_indices;
+use peak_indices::bench_peak_indices;
 
 criterion_group!(benches_extractor, bench_extractor<f64>);
 criterion_group!(benches_fft, bench_fft<f32>, bench_fft<f64>);

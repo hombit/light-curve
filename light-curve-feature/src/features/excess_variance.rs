@@ -39,7 +39,7 @@ where
 {
     fn eval(&self, ts: &mut TimeSeries<T>) -> Result<Vec<T>, EvaluatorError> {
         self.check_ts_length(ts)?;
-        let mean_error2 = ts.w_iter().map(|w| w.recip()).sum::<T>() / ts.lenf();
+        let mean_error2 = ts.w.sample.fold(T::zero(), |sum, w| sum + w.recip()) / ts.lenf();
         Ok(vec![
             (ts.m.get_std2() - mean_error2) / ts.m.get_mean().powi(2),
         ])
@@ -73,6 +73,6 @@ mod tests {
         [0.41846885813148793],
         [0.0; 9],
         [1.0_f32, 1.0, 1.0, 1.0, 5.0, 6.0, 6.0, 6.0, 7.0],
-        Some(&[1.0, 0.5, 1.0, 2.0, 0.5, 2.0, 1.0, 1.0, 0.5]),
+        [1.0, 0.5, 1.0, 2.0, 0.5, 2.0, 1.0, 1.0, 0.5],
     );
 }

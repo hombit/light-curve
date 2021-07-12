@@ -37,13 +37,21 @@ where
 {
     fn eval(&self, ts: &mut TimeSeries<T>) -> Result<Vec<T>, EvaluatorError> {
         self.check_ts_length(ts)?;
-        let result = ts
-            .tm_iter()
-            .tuple_windows()
-            .map(|((t1, m1), (t2, m2))| T::abs((m1 - m2) / (t2 - t1)))
-            .filter(|&x| x.is_finite())
-            .max_by(|a, b| a.partial_cmp(b).unwrap())
-            .expect("All points of the light curve have the same time");
+        let result =
+            ts.t.as_slice()
+                .iter()
+                .tuple_windows()
+                .map(|(&t1, &t2)| t2 - t1)
+                .zip(
+                    ts.m.as_slice()
+                        .iter()
+                        .tuple_windows()
+                        .map(|(&m1, &m2)| m2 - m1),
+                )
+                .map(|(dt, dm)| T::abs(dm / dt))
+                .filter(|&x| x.is_finite())
+                .max_by(|a, b| a.partial_cmp(b).unwrap())
+                .expect("All points of the light curve have the same time");
         Ok(vec![result])
     }
 

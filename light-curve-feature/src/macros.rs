@@ -42,7 +42,7 @@ macro_rules! feat_extr{
 
 /// Helper for FeatureEvaluator implementations using time-series transformation.
 /// You must implement:
-/// - method `transform_ts(ts: &mut TimeSeries<T>) -> TMWVectors<T>`
+/// - method `transform_ts(ts: &mut TimeSeries<T>) -> Result<impl OwnedArrays<T>, EvaluatorError>`
 /// - attribute `info: EvaluatorInfo`
 /// - attribute `feature_names: Vec<String>`
 /// - attribute `feature_descriptions: Vec<String>`
@@ -50,17 +50,17 @@ macro_rules! feat_extr{
 macro_rules! transformer_eval {
     () => {
         fn eval(&self, ts: &mut TimeSeries<T>) -> Result<Vec<T>, EvaluatorError> {
-            let tmw = self.transform_ts(ts)?;
-            let mut new_ts = TimeSeries::new(&tmw.t, &tmw.m, tmw.w.as_ref().map(|w| &w[..]));
+            let arrays = self.transform_ts(ts)?;
+            let mut new_ts = arrays.ts();
             self.feature_extractor.eval(&mut new_ts)
         }
 
         fn eval_or_fill(&self, ts: &mut TimeSeries<T>, fill_value: T) -> Vec<T> {
-            let tmw = match self.transform_ts(ts) {
+            let arrays = match self.transform_ts(ts) {
                 Ok(x) => x,
                 Err(_) => return vec![fill_value; self.size_hint()],
             };
-            let mut new_ts = TimeSeries::new(&tmw.t, &tmw.m, tmw.w.as_ref().map(|w| &w[..]));
+            let mut new_ts = arrays.ts();
             self.feature_extractor.eval_or_fill(&mut new_ts, fill_value)
         }
 

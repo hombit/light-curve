@@ -1,6 +1,8 @@
 use crate::float_trait::Float;
 use crate::time_series::TimeSeries;
 
+use ndarray::Zip;
+
 // See Press et al. sec. 15.2 Fitting Data to a Straight Line, p. 661
 
 #[allow(clippy::many_single_char_names)]
@@ -9,50 +11,53 @@ pub fn fit_straight_line<T: Float>(
     known_errors: bool,
 ) -> StraightLineFitterResult<T> {
     let n = ts.lenf();
-    let (s, sx, sy) = if known_errors & ts.w.is_some() {
-        let (mut s, mut sx, mut sy) = (T::zero(), T::zero(), T::zero());
-        for (x, y, w) in ts.tmw_iter() {
-            s += w;
-            sx += w * x;
-            sy += w * y;
-        }
-        (s, sx, sy)
+    let (s, sx, sy) = if known_errors {
+        Zip::from(&ts.t.sample)
+            .and(&ts.m.sample)
+            .and(&ts.w.sample)
+            .fold(
+                (T::zero(), T::zero(), T::zero()),
+                |(s, sx, sy), &x, &y, &w| (s + w, sx + w * x, sy + w * y),
+            )
     } else {
-        let (mut sx, mut sy) = (T::zero(), T::zero());
-        for (x, y) in ts.tm_iter() {
-            sx += x;
-            sy += y;
-        }
+        let (sx, sy) = Zip::from(&ts.t.sample)
+            .and(&ts.m.sample)
+            .fold((T::zero(), T::zero()), |(sx, sy), &x, &y| (sx + x, sy + y));
         (n, sx, sy)
     };
-    let (stt, sty) = if known_errors & ts.w.is_some() {
-        let (mut stt, mut sty) = (T::zero(), T::zero());
-        for (x, y, w) in ts.tmw_iter() {
-            let t = x - sx / s;
-            stt += w * t.powi(2);
-            sty += w * t * y;
-        }
-        (stt, sty)
+    let (stt, sty) = if known_errors {
+        Zip::from(&ts.t.sample)
+            .and(&ts.m.sample)
+            .and(&ts.w.sample)
+            .fold((T::zero(), T::zero()), |(stt, sty), &x, &y, &w| {
+                let t = x - sx / s;
+                (stt + w * t.powi(2), sty + w * t * y)
+            })
     } else {
-        let (mut stt, mut sty) = (T::zero(), T::zero());
-        for (x, y) in ts.tm_iter() {
-            let t = x - sx / s;
-            stt += t.powi(2);
-            sty += t * y;
-        }
-        (stt, sty)
+        Zip::from(&ts.t.sample).and(&ts.m.sample).fold(
+            (T::zero(), T::zero()),
+            |(stt, sty), &x, &y| {
+                let t = x - sx / s;
+                (stt + t.powi(2), sty + t * y)
+            },
+        )
     };
     let slope = sty / stt;
     let intercept = (sy - sx * slope) / s;
     let mut slope_sigma2 = stt.recip();
-    let chi2: T = if known_errors & ts.w.is_some() {
-        ts.tmw_iter()
-            .map(|(x, y, w)| (y - intercept - slope * x).powi(2) * w)
-            .sum()
+    let chi2: T = if known_errors {
+        Zip::from(&ts.t.sample)
+            .and(&ts.m.sample)
+            .and(&ts.w.sample)
+            .fold(T::zero(), |chi2, &x, &y, &w| {
+                chi2 + (y - intercept - slope * x).powi(2) * w
+            })
     } else {
-        ts.tm_iter()
-            .map(|(x, y)| (y - intercept - slope * x).powi(2))
-            .sum()
+        Zip::from(&ts.t.sample)
+            .and(&ts.m.sample)
+            .fold(T::zero(), |chi2, &x, &y| {
+                chi2 + (y - intercept - slope * x).powi(2)
+            })
     };
     let reduced_chi2 = chi2 / (n - T::two());
     if !known_errors {
@@ -82,7 +87,7 @@ mod tests {
     fn straight_line_fitter() {
         let x = [0.5, 1.5, 2.5, 5.0, 7.0, 16.0];
         let y = [-1.0, 3.0, 2.0, 6.0, 10.0, 25.0];
-        let ts = TimeSeries::new(&x, &y, None);
+        let ts = TimeSeries::new_without_weight(&x, &y);
         // scipy.optimize.curve_fit(absolute_sigma=False)
         let desired_slope = 1.63021767;
         let desired_slope_sigma2 = 0.0078127;
@@ -98,7 +103,7 @@ mod tests {
         let x = [0.5, 1.5, 2.5, 5.0, 7.0, 16.0];
         let y = [-1.0, 3.0, 2.0, 6.0, 10.0, 25.0];
         let w = [2.0, 1.0, 3.0, 10.0, 1.0, 0.4];
-        let ts = TimeSeries::new(&x, &y, Some(&w));
+        let ts = TimeSeries::new(&x, &y, &w);
         // curve_fit(lambda x, a, b: a + b*x, xdata=x, ydata=y, sigma=w**-0.5, absolute_sigma=True)
         let desired_slope = 1.6023644;
         let desired_slope_sigma2 = 0.00882845;

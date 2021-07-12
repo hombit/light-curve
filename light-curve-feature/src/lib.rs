@@ -10,8 +10,8 @@
 //! // Define light curve
 //! let time = [0.0, 1.0, 2.0, 3.0, 4.0];
 //! let magn = [-1.0, 2.0, 1.0, 3.0, 4.5];
-//! let weights = [5.0, 10.0, 2.0, 10.0, 5.0]; // inversed squared magnitude errors
-//! let mut ts = TimeSeries::new(&time[..], &magn[..], Some(&weights[..]));
+//! let weights = [5.0, 10.0, 2.0, 10.0, 5.0]; // inverse squared magnitude errors
+//! let mut ts = TimeSeries::new(&time, &magn, &weights);
 //! // Get results and print
 //! let result = fe.eval(&mut ts)?;
 //! let names = fe.get_names();
@@ -55,9 +55,11 @@ pub use periodogram::{
     PeriodogramPowerFft, QuantileNyquistFreq,
 };
 
-pub mod sorted_vec;
+pub mod sorted_array;
 
-pub mod statistics;
+pub mod peak_indices;
 
 pub mod time_series;
 pub use time_series::TimeSeries;
+
+mod types;

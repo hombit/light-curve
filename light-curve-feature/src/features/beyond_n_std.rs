@@ -26,7 +26,7 @@ use conv::ConvUtil;
 /// let time = [0.0; 21];  // Doesn't depend on time
 /// let mut magn = vec![0.0; 17];
 /// magn.extend_from_slice(&[SQRT_2, -SQRT_2, 2.0 * SQRT_2, -2.0 * SQRT_2]);
-/// let mut ts = TimeSeries::new(&time[..], &magn[..], None);
+/// let mut ts = TimeSeries::new_without_weight(&time[..], &magn[..]);
 /// assert_eq!(0.0, ts.m.get_mean());
 /// assert!((1.0 - ts.m.get_std()).abs() < 1e-15);
 /// assert_eq!(vec![4.0 / 21.0, 2.0 / 21.0], fe.eval(&mut ts).unwrap());
@@ -92,15 +92,11 @@ where
         self.check_ts_length(ts)?;
         let m_mean = ts.m.get_mean();
         let threshold = ts.m.get_std() * self.nstd;
-        Ok(vec![
-            ts.m.sample
-                .iter()
-                .filter(|&&y| T::abs(y - m_mean) > threshold)
-                .count()
-                .value_as::<T>()
-                .unwrap()
-                / ts.lenf(),
-        ])
+        let count_beyond = ts.m.sample.fold(0, |count, &m| {
+            let beyond = T::abs(m - m_mean) > threshold;
+            count + (beyond as u32)
+        });
+        Ok(vec![count_beyond.value_as::<T>().unwrap() / ts.lenf()])
     }
 
     fn get_info(&self) -> &EvaluatorInfo {

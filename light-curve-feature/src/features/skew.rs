@@ -44,10 +44,10 @@ where
         let n = ts.lenf();
         let n_1 = n - T::one();
         let n_2 = n_1 - T::one();
-        Ok(vec![
-            ts.m.sample.iter().map(|&x| (x - m_mean).powi(3)).sum::<T>() / m_std.powi(3) * n
-                / (n_1 * n_2),
-        ])
+        let third_moment =
+            ts.m.sample
+                .fold(T::zero(), |sum, &m| sum + (m - m_mean).powi(3));
+        Ok(vec![third_moment / m_std.powi(3) * n / (n_1 * n_2)])
     }
 
     fn get_info(&self) -> &EvaluatorInfo {

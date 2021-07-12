@@ -28,7 +28,7 @@ pub fn bench_periodogram(c: &mut Criterion) {
                 format!("Periodogram: {} length, {:?}", n, power).as_str(),
                 |b| {
                     b.iter(|| {
-                        let mut ts = TimeSeries::new(&x[..], &y[..], None);
+                        let mut ts = TimeSeries::new_without_weight(&x, &y);
                         let periodogram =
                             Periodogram::from_t(power.clone(), &x, *resolution, 1.0, &nyquist);
                         periodogram.power(black_box(&mut ts));

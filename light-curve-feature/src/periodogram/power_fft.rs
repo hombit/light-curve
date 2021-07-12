@@ -3,6 +3,7 @@ use crate::periodogram::fft::*;
 use crate::periodogram::freq::FreqGrid;
 use crate::periodogram::power::*;
 use crate::time_series::TimeSeries;
+
 use conv::{ConvAsUtil, RoundToNearest};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -66,7 +67,7 @@ where
     T: Float,
 {
     fn power(&self, freq: &FreqGrid<T>, ts: &mut TimeSeries<T>) -> Vec<T> {
-        let m_std2 = ts.m.get_std().powi(2);
+        let m_std2 = ts.m.get_std2();
 
         if m_std2.is_zero() {
             return vec![T::zero(); freq.size.next_power_of_two()];
@@ -257,12 +258,16 @@ fn spread_arrays_for_fft<T: Float>(
     let t0 = ts.t.sample[0];
     let m_mean = ts.m.get_mean();
 
-    for (t, m) in ts.tm_iter() {
-        let x = (t - t0) / grid.dt;
-        spread(x_sch, x, m - m_mean);
-        let double_x = T::two() * x;
-        spread(x_sc2, double_x, T::one());
-    }
+    // For contiguous arrays it is faster than ndarray::Zip::for_each
+    ts.t.as_slice()
+        .iter()
+        .zip(ts.m.as_slice().iter())
+        .for_each(|(&t, &m)| {
+            let x = (t - t0) / grid.dt;
+            spread(x_sch, x, m - m_mean);
+            let double_x = T::two() * x;
+            spread(x_sc2, double_x, T::one());
+        });
 }
 
 #[cfg(test)]
@@ -304,7 +309,7 @@ mod tests {
 
         let t = linspace(0.0, (N - 1) as f64, N);
         let m: Vec<f64> = (0..N).map(|_| rng.gen()).collect();
-        let mut ts = TimeSeries::new(&t[..], &m[..], None);
+        let mut ts = TimeSeries::new_without_weight(&t[..], &m[..]);
 
         let nyquist: Box<dyn NyquistFreq<f64>> = Box::new(AverageNyquistFreq);
         let freq_grid = FreqGrid::from_t(&t, 1.0, 1.0, &nyquist);
@@ -334,7 +339,7 @@ mod tests {
 
         let t = linspace(0.0, (N - 1) as f64, N);
         let m: Vec<f64> = (0..N).map(|_| rng.gen()).collect();
-        let mut ts = TimeSeries::new(&t[..], &m[..], None);
+        let mut ts = TimeSeries::new_without_weight(&t[..], &m[..]);
 
         let nyquist: Box<dyn NyquistFreq<f64>> = Box::new(AverageNyquistFreq);
         let freq_grid = FreqGrid::from_t(&t, RESOLUTION as f32, 1.0, &nyquist);

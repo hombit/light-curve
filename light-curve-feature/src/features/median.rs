@@ -60,9 +60,16 @@ mod tests {
     eval_info_test!(median_info, Median::default());
 
     feature_test!(
-        median,
+        median_odd,
         [Box::new(Median::new())],
         [3.0],
         [-99.0, 0.0, 3.0, 3.1, 3.2],
+    );
+
+    feature_test!(
+        median_even,
+        [Box::new(Median::new())],
+        [1.5],
+        [-99.0, 0.0, 4.0, 3.0, 2.0, 1.0],
     );
 }

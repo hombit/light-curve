@@ -77,16 +77,11 @@ where
         let m_median = ts.m.get_median();
         let amplitude = T::half() * (ts.m.get_max() - ts.m.get_min());
         let threshold = self.quantile * amplitude;
-        Ok(vec![
-            ts.m.sample
-                .iter()
-                .cloned()
-                .filter(|&y| T::abs(y - m_median) < threshold)
-                .count()
-                .value_as::<T>()
-                .unwrap()
-                / ts.lenf(),
-        ])
+        let count_under = ts.m.sample.fold(0, |count, &m| {
+            let under = T::abs(m - m_median) < threshold;
+            count + (under as u32)
+        });
+        Ok(vec![count_under.value_as::<T>().unwrap() / ts.lenf()])
     }
 
     fn get_info(&self) -> &EvaluatorInfo {

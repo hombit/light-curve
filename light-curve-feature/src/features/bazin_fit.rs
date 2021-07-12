@@ -219,7 +219,7 @@ mod tests {
             .collect();
         let w: Vec<_> = model.iter().copied().map(f64::recip).collect();
         println!("{:?}\n{:?}\n{:?}\n{:?}", t, model, m, w);
-        let mut ts = TimeSeries::new(&t, &m, Some(&w));
+        let mut ts = TimeSeries::new(&t, &m, &w);
 
         let fe = FeatureExtractor::new(vec![Box::new(BazinFit::default())]);
         let values = fe.eval(&mut ts).unwrap();

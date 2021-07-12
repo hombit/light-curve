@@ -1,8 +1,9 @@
 use crate::evaluator::*;
 use crate::extractor::FeatureExtractor;
+use crate::peak_indices::peak_indices_reverse_sorted;
 use crate::periodogram;
 use crate::periodogram::{AverageNyquistFreq, NyquistFreq, PeriodogramPower, PeriodogramPowerFft};
-use crate::statistics::Statistics;
+
 use std::iter;
 
 fn number_ending(i: usize) -> &'static str {
@@ -80,10 +81,8 @@ where
 {
     fn eval(&self, ts: &mut TimeSeries<T>) -> Result<Vec<T>, EvaluatorError> {
         self.check_ts_length(ts)?;
-        Ok(ts
-            .m
-            .sample
-            .peak_indices_reverse_sorted()
+        let peak_indices = peak_indices_reverse_sorted(&ts.m.sample);
+        Ok(peak_indices
             .iter()
             .flat_map(|&i| {
                 iter::once(Periodogram::period(ts.t.sample[i]))
@@ -237,7 +236,7 @@ where
     fn periodogram(&self, ts: &mut TimeSeries<T>) -> periodogram::Periodogram<T> {
         periodogram::Periodogram::from_t(
             self.periodogram_algorithm.clone(),
-            ts.t.sample,
+            ts.t.as_slice(),
             self.resolution,
             self.max_freq_factor,
             &self.nyquist,
@@ -251,17 +250,16 @@ where
     pub fn freq_power(&self, ts: &mut TimeSeries<T>) -> (Vec<T>, Vec<T>) {
         let p = self.periodogram(ts);
         let power = p.power(ts);
-        let freq: Vec<_> = (0..power.len()).map(|i| p.freq(i)).collect();
+        let freq = (0..power.len()).map(|i| p.freq(i)).collect::<Vec<_>>();
         (freq, power)
     }
 
-    fn transform_ts(&self, ts: &mut TimeSeries<T>) -> Result<TmwVectors<T>, EvaluatorError> {
+    fn transform_ts(&self, ts: &mut TimeSeries<T>) -> Result<TmArrays<T>, EvaluatorError> {
         self.check_ts_length(ts)?;
         let (freq, power) = self.freq_power(ts);
-        Ok(TmwVectors {
-            t: freq,
-            m: power,
-            w: None,
+        Ok(TmArrays {
+            t: freq.into(),
+            m: power.into(),
         })
     }
 
@@ -319,7 +317,7 @@ mod tests {
         let fe = FeatureExtractor::new(vec![Box::new(Periodogram::default())]);
         let x = linspace(0.0_f32, 1.0, 100);
         let y = [0.0_f32; 100];
-        let mut ts = TimeSeries::new(&x[..], &y[..], None);
+        let mut ts = TimeSeries::new_without_weight(&x, &y);
         let desired = vec![0.0, 0.0];
         let actual = fe.eval(&mut ts).unwrap();
         assert_eq!(desired, actual);
@@ -339,7 +337,7 @@ mod tests {
                     + 0.01 * rng.gen::<f32>() // noise stabilizes solution
             })
             .collect();
-        let mut ts = TimeSeries::new(&x[..], &y[..], None);
+        let mut ts = TimeSeries::new_without_weight(&x[..], &y[..]);
         let desired = [period];
         let actual = [fe.eval(&mut ts).unwrap()[0]]; // Test period only
         all_close(&desired[..], &actual[..], 5e-3);
@@ -356,7 +354,7 @@ mod tests {
             .iter()
             .map(|&x| 3.0 * f32::sin(2.0 * std::f32::consts::PI / period * x + 0.5) + 4.0)
             .collect();
-        let mut ts = TimeSeries::new(&x[..], &y[..], None);
+        let mut ts = TimeSeries::new_without_weight(&x[..], &y[..]);
         let desired = [period];
         let actual = [fe.eval(&mut ts).unwrap()[0]]; // Test period only
         all_close(&desired[..], &actual[..], 5e-3);
@@ -376,7 +374,7 @@ mod tests {
             .iter()
             .map(|&x| 3.0 * f32::sin(2.0 * std::f32::consts::PI / period * x + 0.5) + 4.0)
             .collect();
-        let mut ts = TimeSeries::new(&x[..], &y[..], None);
+        let mut ts = TimeSeries::new_without_weight(&x[..], &y[..]);
         let features = fe.eval(&mut ts).unwrap();
         all_close(
             &[features[0], features[1]],
@@ -401,7 +399,7 @@ mod tests {
                     + 4.0
             })
             .collect();
-        let mut ts = TimeSeries::new(&x[..], &y[..], None);
+        let mut ts = TimeSeries::new_without_weight(&x[..], &y[..]);
         let desired = [period2, period1];
         let features = fe.eval(&mut ts).unwrap();
         let actual = [features[0], features[2]]; // Test period only
@@ -426,7 +424,7 @@ mod tests {
                     + 4.0
             })
             .collect();
-        let mut ts = TimeSeries::new(&x[..], &y[..], None);
+        let mut ts = TimeSeries::new_without_weight(&x[..], &y[..]);
         let desired = [period2, period1];
         let features = fe.eval(&mut ts).unwrap();
         let actual = [features[0], features[2]]; // Test period only
@@ -456,7 +454,7 @@ mod tests {
                     + 4.0
             })
             .collect();
-        let mut ts = TimeSeries::new(&x, &y, None);
+        let mut ts = TimeSeries::new_without_weight(&x, &y);
         let features = fe.eval(&mut ts).unwrap();
         assert!(f32::abs(features[0] - period2) / period2 < 1.0 / n as f32);
         assert!(f32::abs(features[2] - period1) / period1 < 1.0 / n as f32);

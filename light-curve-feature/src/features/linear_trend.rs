@@ -306,7 +306,7 @@ mod tests {
             18.677000045776367,
             18.69700050354004,
         ];
-        let mut ts = TimeSeries::new(&x[..], &y[..], None);
+        let mut ts = TimeSeries::new_without_weight(&x, &y);
         let sigma: f32 = fe.eval(&mut ts).unwrap()[1];
         assert!(sigma.is_finite());
     }
@@ -519,7 +519,7 @@ mod tests {
             19.143999099731445,
             19.21500015258789,
         ];
-        let mut ts: TimeSeries<f32> = TimeSeries::new(&x[..], &y[..], None);
+        let mut ts: TimeSeries<f32> = TimeSeries::new_without_weight(&x, &y);
         let actual = fe.eval(&mut ts).unwrap();
         assert!(actual.iter().all(|x| x.is_finite()));
     }
@@ -732,7 +732,7 @@ mod tests {
             18.020999908447266,
             18.075000762939453,
         ];
-        let mut ts: TimeSeries<f32> = TimeSeries::new(&x[..], &y[..], None);
+        let mut ts: TimeSeries<f32> = TimeSeries::new_without_weight(&x, &y);
         let actual = fe.eval(&mut ts).unwrap();
         assert!(actual.iter().all(|x| x.is_finite()));
     }
@@ -823,7 +823,7 @@ mod tests {
             16.614, 16.605, 16.623, 16.603, 16.604, 16.618, 16.592, 16.578, 16.59, 16.598, 16.572,
             16.609, 16.592, 16.574, 16.562, 16.558, 16.581, 16.581, 16.602, 16.581, 16.595,
         ];
-        let mut ts: TimeSeries<f32> = TimeSeries::new(&x[..], &y[..], None);
+        let mut ts: TimeSeries<f32> = TimeSeries::new_without_weight(&x, &y);
         let actual = fe.eval(&mut ts).unwrap();
         assert!(actual.iter().all(|x| x.is_finite()));
     }
@@ -914,7 +914,7 @@ mod tests {
             16.582, 16.636, 16.581, 16.597, 16.595, 16.573, 16.595, 16.612, 16.578, 16.554, 16.586,
             16.586, 16.585, 16.583, 16.662, 16.613, 16.607, 16.592, 16.603, 16.608,
         ];
-        let mut ts: TimeSeries<f32> = TimeSeries::new(&x[..], &y[..], None);
+        let mut ts: TimeSeries<f32> = TimeSeries::new_without_weight(&x, &y);
         let actual = fe.eval(&mut ts).unwrap();
         assert!(actual.iter().all(|x| x.is_finite()));
     }

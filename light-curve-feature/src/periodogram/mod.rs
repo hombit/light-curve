@@ -1,5 +1,6 @@
 use crate::float_trait::Float;
 use crate::time_series::TimeSeries;
+
 use conv::ConvAsUtil;
 
 mod fft;
@@ -90,8 +91,10 @@ where
 #[allow(clippy::excessive_precision)]
 mod tests {
     use super::*;
-    use crate::sorted_vec::SortedVec;
-    use crate::statistics::Statistics;
+
+    use crate::peak_indices::peak_indices_reverse_sorted;
+    use crate::sorted_array::SortedArray;
+
     use light_curve_common::{all_close, linspace};
     use rand::prelude::*;
 
@@ -101,7 +104,7 @@ mod tests {
         const N: usize = 100;
         let t = linspace(0.0, 99.0, N);
         let m: Vec<_> = t.iter().map(|&x| f64::sin(OMEGA_SIN * x)).collect();
-        let mut ts = TimeSeries::new(&t[..], &m[..], None);
+        let mut ts = TimeSeries::new_without_weight(&t, &m);
         let mut periodogram = Periodogram::new(
             Box::new(PeriodogramPowerDirect),
             FreqGrid {
@@ -161,7 +164,7 @@ mod tests {
 
         let t = linspace(0.0, (N - 1) as f64, N);
         let m: Vec<_> = t.iter().map(|&x| f64::sin(OMEGA * x)).collect();
-        let mut ts = TimeSeries::new(&t[..], &m[..], None);
+        let mut ts = TimeSeries::new_without_weight(&t, &m);
         let nyquist: Box<dyn NyquistFreq<f64>> = Box::new(AverageNyquistFreq);
 
         let direct = Periodogram::from_t(
@@ -197,7 +200,7 @@ mod tests {
             .iter()
             .map(|&x| f64::sin(OMEGA1 * x) + AMPLITUDE2 * f64::cos(OMEGA2 * x))
             .collect();
-        let mut ts = TimeSeries::new(&t[..], &m[..], None);
+        let mut ts = TimeSeries::new_without_weight(&t, &m);
         let nyquist: Box<dyn NyquistFreq<f64>> = Box::new(AverageNyquistFreq);
 
         let direct = Periodogram::from_t(
@@ -218,8 +221,8 @@ mod tests {
         .power(&mut ts);
 
         assert_eq!(
-            &fft.peak_indices_reverse_sorted()[..2],
-            &direct.peak_indices_reverse_sorted()[..2]
+            peak_indices_reverse_sorted(&fft)[..2],
+            peak_indices_reverse_sorted(&direct)[..2]
         );
     }
 
@@ -234,7 +237,7 @@ mod tests {
         const MAX_FREQ_FACTOR: f32 = 1.0;
 
         let mut rng = StdRng::seed_from_u64(0);
-        let t: SortedVec<_> = (0..N)
+        let t: SortedArray<_> = (0..N)
             .map(|_| rng.gen::<f64>() * (N - 1) as f64)
             .collect::<Vec<_>>()
             .into();
@@ -246,7 +249,7 @@ mod tests {
                     + NOISE_AMPLITUDE * rng.gen::<f64>()
             })
             .collect();
-        let mut ts = TimeSeries::new(&t[..], &m[..], None);
+        let mut ts = TimeSeries::new_without_weight(&t, &m);
         let nyquist: Box<dyn NyquistFreq<f64>> = Box::new(MedianNyquistFreq);
 
         let direct = Periodogram::from_t(
@@ -267,8 +270,8 @@ mod tests {
         .power(&mut ts);
 
         assert_eq!(
-            &fft.peak_indices_reverse_sorted()[..2],
-            &direct.peak_indices_reverse_sorted()[..2]
+            peak_indices_reverse_sorted(&fft)[..2],
+            peak_indices_reverse_sorted(&direct)[..2]
         );
     }
 }
