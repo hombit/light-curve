@@ -1,6 +1,6 @@
 [package]
 name = "light-curve-python"
-version = "0.3.0-alpha.1"
+version = "0.3.0-alpha.2"
 edition = "2018"
 authors = ["Konstantin Malanchev <hombit@gmail.com>"]
 description = "Feature extractor from noisy time series"
@@ -15,16 +15,17 @@ crate-type = ["cdylib"]
 default = ["fftw-static"]
 fftw-static = ["light-curve-feature/fftw-source"]
 fftw-dynamic = ["light-curve-feature/fftw-system"]
-mkl-dynamic = ["light-curve-feature/fftw-mkl"]
+mkl = ["light-curve-feature/fftw-mkl"]
 nonlinear-fit = ["light-curve-feature/gsl"]
 
 [dependencies]
 conv = "^0.3.3"
 enumflags2 = "^0.7.1"
 itertools = "~0.10"
-light-curve-dmdt = "0.2.5"
+light-curve-dmdt = "0.3.0"
 ndarray = { version = "^0.14.0", features = ["rayon"] }
-numpy = "^0.13"
+# numpy 0.13.2 brings ndarray 0.15 which is not compatible with light-curve-dmdt
+numpy = "=0.13.1"
 num_cpus = "^1.13.0"
 num-traits = "^0.2"
 rand = "^0.8.3"

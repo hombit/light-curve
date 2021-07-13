@@ -20,7 +20,7 @@ jobs:
       uses: actions-rs/cargo@v1
       with:
         command: build
-        args: --workspace --all-targets --exclude light-curve-python
+        args: --workspace --all-targets --exclude python/light-curve
     - name: Build light-curve-feature gsl+fftw-source
       uses: actions-rs/cargo@v1
       with:
@@ -40,7 +40,7 @@ jobs:
       uses: actions-rs/cargo@v1
       with:
         command: test
-        args: --workspace --exclude light-curve-python
+        args: --workspace --exclude python/light-curve
     - name: Check formatting
       uses: actions-rs/cargo@v1
       with:
@@ -50,7 +50,7 @@ jobs:
       uses: actions-rs/cargo@v1
       with:
         command: clippy
-        args: --workspace --exclude light-curve-python --all-targets -- -D warnings
+        args: --workspace --exclude python/light-curve --all-targets -- -D warnings
 
 
   python:
@@ -94,7 +94,7 @@ jobs:
     - name: Build package with dynamic FFTW
       run: maturin build --manylinux=off --cargo-extra-args="--no-default-features --features fftw-dynamic,nonlinear-fit"
     - name: Build package with dynamic MKL
-      run: maturin build --manylinux=off --cargo-extra-args="--no-default-features --features mkl-dynamic,nonlinear-fit"
+      run: maturin build --manylinux=off --cargo-extra-args="--no-default-features --features mkl,nonlinear-fit"
     - name: Check Rust formatting
       uses: actions-rs/cargo@v1
       with:
@@ -105,9 +105,20 @@ jobs:
       with:
         command: clippy
         args: --all-targets -- -D warnings
-    - name: Check Python formatting
-      run: black .
     - name: Run Python tests
       run: tox -p -q
     - name: Check Python formatting
       run: black --check --diff .
+
+
+  arm:
+
+    runs-on: [self-hosted, linux, ARM64]
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: build all but python
+        run: cargo build --workspace --all-targets --exclude python/light-curve
+      - name: build python
+        run: maturin build
+        working-directory: python/light-curve

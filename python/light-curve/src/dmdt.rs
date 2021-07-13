@@ -1,11 +1,11 @@
 use crate::arr_wrapper::ArrWrapper;
 use crate::errors::{Exception, Res};
 use crate::sorted::check_sorted;
-use conv::ConvUtil;
+use conv::{ApproxFrom, ApproxInto, ConvAsUtil};
 use enumflags2::{bitflags, BitFlags};
 use light_curve_dmdt as lcdmdt;
 use ndarray::IntoNdProducer;
-use numpy::{Element, IntoPyArray, PyArray1};
+use numpy::{Element, IntoPyArray, PyArray1, ToPyArray};
 use pyo3::class::iter::PyIterProtocol;
 use pyo3::prelude::*;
 use pyo3::types::PyTuple;
@@ -13,6 +13,7 @@ use rand::SeedableRng;
 use rand_xoshiro::Xoshiro256PlusPlus;
 use rayon::prelude::*;
 use std::cell::RefCell;
+use std::convert::{TryFrom, TryInto};
 use std::ops::{DerefMut, Range};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
@@ -24,6 +25,28 @@ enum GenericFloatArray1<'a> {
     Float32(&'a PyArray1<f32>),
     #[pyo3(transparent, annotation = "np.ndarray[float64]")]
     Float64(&'a PyArray1<f64>),
+}
+
+impl<'a> TryFrom<GenericFloatArray1<'a>> for &'a PyArray1<f32> {
+    type Error = ();
+
+    fn try_from(value: GenericFloatArray1<'a>) -> Result<Self, Self::Error> {
+        match value {
+            GenericFloatArray1::Float32(a) => Ok(a),
+            GenericFloatArray1::Float64(_) => Err(()),
+        }
+    }
+}
+
+impl<'a> TryFrom<GenericFloatArray1<'a>> for &'a PyArray1<f64> {
+    type Error = ();
+
+    fn try_from(value: GenericFloatArray1<'a>) -> Result<Self, Self::Error> {
+        match value {
+            GenericFloatArray1::Float32(_) => Err(()),
+            GenericFloatArray1::Float64(a) => Ok(a),
+        }
+    }
 }
 
 #[derive(FromPyObject, Copy, Clone, std::fmt::Debug)]
@@ -38,21 +61,31 @@ enum DropNObsType {
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, PartialEq)]
 enum NormFlag {
-    LgDt,
+    Dt,
     Max,
 }
 
+#[derive(Copy, Clone, Debug)]
+enum ErrorFunction {
+    Exact,
+    Eps1Over1e3,
+}
+
 #[derive(Clone)]
-struct GenericDmDt<T> {
+struct GenericDmDt<T>
+where
+    T: lcdmdt::Float,
+{
     dmdt: lcdmdt::DmDt<T>,
     norm: BitFlags<NormFlag>,
-    error_func: lcdmdt::ErrorFunction,
+    error_func: ErrorFunction,
     n_jobs: usize,
 }
 
-impl<T> GenericDmDt<T>
+impl<'a, T> GenericDmDt<T>
 where
     T: Element + ndarray::NdFloat + lcdmdt::ErfFloat,
+    &'a PyArray1<T>: TryFrom<GenericFloatArray1<'a>>,
 {
     fn sigma_to_err2(sigma: &PyArray1<T>) -> ndarray::Array1<T> {
         let mut a = sigma.to_owned_array();
@@ -61,16 +94,16 @@ where
     }
 
     fn normalize(&self, a: &mut ndarray::Array2<T>, t: &[T]) {
-        if self.norm.contains(NormFlag::LgDt) {
-            let lgdt = self.dmdt.lgdt_points(&t);
-            let lgdt_no_zeros = lgdt.mapv(|x| {
+        if self.norm.contains(NormFlag::Dt) {
+            let dt = self.dmdt.dt_points(&t);
+            let dt_no_zeros = dt.mapv(|x| {
                 if x == 0 {
                     T::one()
                 } else {
-                    x.value_as::<T>().unwrap()
+                    x.approx_into().unwrap()
                 }
             });
-            *a /= &lgdt_no_zeros.into_shape((a.nrows(), 1)).unwrap();
+            *a /= &dt_no_zeros.into_shape((a.nrows(), 1)).unwrap();
         }
         if self.norm.contains(NormFlag::Max) {
             let max = *a.iter().max_by(|a, b| a.partial_cmp(b).unwrap()).unwrap();
@@ -80,17 +113,44 @@ where
         }
     }
 
-    fn count_lgdt(&self, t: &[T], sorted: Option<bool>) -> Res<ndarray::Array1<T>> {
-        check_sorted(t, sorted)?;
-        Ok(self
-            .dmdt
-            .lgdt_points(t)
-            .mapv(|x| x.value_as::<T>().unwrap()))
+    fn py_count_dt(&self, py: Python, t: &PyArray1<T>, sorted: Option<bool>) -> Res<PyObject> {
+        self.count_dt(&ArrWrapper::new(t, true), sorted)
+            .map(|a| a.into_pyarray(py).into_py(py))
     }
 
-    fn count_lgdt_many(&self, t_: Vec<&[T]>, sorted: Option<bool>) -> Res<ndarray::Array2<T>> {
-        let lgdt_size = self.dmdt.lgdt_grid.len();
-        let mut result = ndarray::Array2::zeros((t_.len(), lgdt_size));
+    fn count_dt(&self, t: &[T], sorted: Option<bool>) -> Res<ndarray::Array1<T>> {
+        check_sorted(t, sorted)?;
+        Ok(self.dmdt.dt_points(t).mapv(|x| x.approx_into().unwrap()))
+    }
+
+    fn py_count_dt_many(
+        &self,
+        py: Python,
+        t_: Vec<GenericFloatArray1<'a>>,
+        sorted: Option<bool>,
+    ) -> Res<PyObject> {
+        let wrapped_t_ = t_
+            .into_iter()
+            .enumerate()
+            .map(|(i, t)| match t.try_into() {
+                Ok(t) => Ok(ArrWrapper::new(t, true)),
+                Err(_) => Err(Exception::TypeError(format!(
+                    "t_[{}] has mismatched dtype with the t_[0] which is {}",
+                    i,
+                    std::any::type_name::<T>()
+                ))),
+            })
+            .collect::<Res<Vec<_>>>()?;
+        let typed_t_ = wrapped_t_.iter().map(|t| &t[..]).collect();
+        Ok(self
+            .count_dt_many(typed_t_, sorted)?
+            .into_pyarray(py)
+            .into_py(py))
+    }
+
+    fn count_dt_many(&self, t_: Vec<&[T]>, sorted: Option<bool>) -> Res<ndarray::Array2<T>> {
+        let dt_size = self.dmdt.dt_grid.cell_count();
+        let mut result = ndarray::Array2::zeros((t_.len(), dt_size));
 
         rayon::ThreadPoolBuilder::new()
             .num_threads(self.n_jobs)
@@ -101,19 +161,57 @@ where
                     .and(t_.into_producer())
                     .into_par_iter()
                     .try_for_each::<_, Res<_>>(|(mut count, t)| {
-                        count.assign(&self.count_lgdt(t, sorted)?);
+                        count.assign(&self.count_dt(t, sorted)?);
                         Ok(())
                     })
             })?;
         Ok(result)
     }
 
+    fn py_points(
+        &self,
+        py: Python,
+        t: &PyArray1<T>,
+        m: &PyArray1<T>,
+        sorted: Option<bool>,
+    ) -> Res<PyObject> {
+        Ok(self
+            .points(&ArrWrapper::new(t, true), &ArrWrapper::new(m, true), sorted)?
+            .into_pyarray(py)
+            .into_py(py))
+    }
+
     fn points(&self, t: &[T], m: &[T], sorted: Option<bool>) -> Res<ndarray::Array2<T>> {
         check_sorted(t, sorted)?;
 
-        let mut result = self.dmdt.points(t, m).mapv(|x| x.value_as::<T>().unwrap());
+        let mut result = self.dmdt.points(t, m).mapv(|x| x.approx_into().unwrap());
         self.normalize(&mut result, &t);
         Ok(result)
+    }
+
+    fn py_points_many(
+        &self,
+        py: Python,
+        lcs: Vec<(GenericFloatArray1<'a>, GenericFloatArray1<'a>)>,
+        sorted: Option<bool>,
+    ) -> Res<PyObject> {
+        let wrapped_lcs = lcs
+            .into_iter()
+            .enumerate()
+            .map(|(i, (t, m))| match (t.try_into(), m.try_into()) {
+                (Ok(t), Ok(m)) => Ok((ArrWrapper::new(t, true), ArrWrapper::new(m, true))),
+                _ => Err(Exception::TypeError(format!(
+                    "lcs[{}] elements have mismatched dtype with the lc[0][0] which is {}",
+                    i,
+                    std::any::type_name::<T>(),
+                ))),
+            })
+            .collect::<Res<Vec<_>>>()?;
+        let typed_lcs = wrapped_lcs.iter().map(|(t, m)| (&t[..], &m[..])).collect();
+        Ok(self
+            .points_many(typed_lcs, sorted)?
+            .into_pyarray(py)
+            .into_py(py))
     }
 
     fn points_many(&self, lcs: Vec<(&[T], &[T])>, sorted: Option<bool>) -> Res<ndarray::Array3<T>> {
@@ -134,6 +232,49 @@ where
                     })
             })?;
         Ok(result)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn generic_dmdt_points_batches(
+        &self,
+        lcs: Vec<(GenericFloatArray1<'a>, GenericFloatArray1<'a>)>,
+        sorted: Option<bool>,
+        batch_size: usize,
+        yield_index: bool,
+        shuffle: bool,
+        drop_nobs: DropNObsType,
+        random_seed: Option<u64>,
+    ) -> Res<GenericDmDtBatches<T, TmLc<T>>> {
+        let typed_lcs = lcs
+            .into_iter()
+            .enumerate()
+            .map(|(i, (t, m))| {
+                let t: Result<&'a PyArray1<T>, _> = t.try_into();
+                let m: Result<&'a PyArray1<T>, _> = m.try_into();
+                match (t, m) {
+                    (Ok(t), Ok(m)) => {
+                        let t = t.to_owned_array();
+                        check_sorted(t.as_slice().unwrap(), sorted)?;
+                        let m = m.to_owned_array();
+                        Ok((t, m))
+                    }
+                    _ => Err(Exception::TypeError(format!(
+                        "lcs[{}] elements have mismatched dtype with the lc[0][0] which is {}",
+                        i,
+                        std::any::type_name::<T>(),
+                    ))),
+                }
+            })
+            .collect::<Res<Vec<_>>>()?;
+        GenericDmDtBatches::new(
+            self.clone(),
+            typed_lcs,
+            batch_size,
+            yield_index,
+            shuffle,
+            drop_nobs,
+            random_seed,
+        )
     }
 
     fn points_from_columnar(
@@ -164,7 +305,7 @@ where
                     let mut a = self
                         .dmdt
                         .points(t_lc, m_lc)
-                        .mapv(|x| x.value_as::<T>().unwrap());
+                        .mapv(|x| x.approx_into().unwrap());
                     self.normalize(&mut a, t_lc);
 
                     let (nrows, ncols) = (a.nrows(), a.ncols());
@@ -176,6 +317,26 @@ where
         Ok(ndarray::concatenate(ndarray::Axis(0), &map_views).unwrap())
     }
 
+    fn py_gausses(
+        &self,
+        py: Python,
+        t: &PyArray1<T>,
+        m: &PyArray1<T>,
+        sigma: &PyArray1<T>,
+        sorted: Option<bool>,
+    ) -> Res<PyObject> {
+        let err2 = Self::sigma_to_err2(sigma);
+        Ok(self
+            .gausses(
+                &ArrWrapper::new(t, true),
+                &ArrWrapper::new(m, true),
+                err2.as_slice().unwrap(),
+                sorted,
+            )?
+            .into_pyarray(py)
+            .into_py(py))
+    }
+
     fn gausses(
         &self,
         t: &[T],
@@ -185,9 +346,50 @@ where
     ) -> Res<ndarray::Array2<T>> {
         check_sorted(t, sorted)?;
 
-        let mut result = self.dmdt.gausses(&t, &m, err2, &self.error_func);
+        let mut result = match self.error_func {
+            ErrorFunction::Exact => self.dmdt.gausses::<lcdmdt::ExactErf>(&t, &m, err2),
+            ErrorFunction::Eps1Over1e3 => self.dmdt.gausses::<lcdmdt::Eps1Over1e3Erf>(&t, &m, err2),
+        };
         self.normalize(&mut result, &t);
         Ok(result)
+    }
+
+    fn py_gausses_many(
+        &self,
+        py: Python,
+        lcs: Vec<(
+            GenericFloatArray1<'a>,
+            GenericFloatArray1<'a>,
+            GenericFloatArray1<'a>,
+        )>,
+        sorted: Option<bool>,
+    ) -> Res<PyObject> {
+        let wrapped_lcs = lcs
+            .into_iter()
+            .enumerate()
+            .map(
+                |(i, (t, m, sigma))| match (t.try_into(), m.try_into(), sigma.try_into()) {
+                    (Ok(t), Ok(m), Ok(sigma)) => Ok((
+                        ArrWrapper::new(t, true),
+                        ArrWrapper::new(m, true),
+                        Self::sigma_to_err2(sigma),
+                    )),
+                    _ => Err(Exception::TypeError(format!(
+                        "lcs[{}] elements have mismatched dtype with the lc[0][0] which is {}",
+                        i,
+                        std::any::type_name::<T>()
+                    ))),
+                },
+            )
+            .collect::<Res<Vec<_>>>()?;
+        let typed_lcs = wrapped_lcs
+            .iter()
+            .map(|(t, m, err2)| (&t[..], &m[..], err2.as_slice().unwrap()))
+            .collect();
+        Ok(self
+            .gausses_many(typed_lcs, sorted)?
+            .into_pyarray(py)
+            .into_py(py))
     }
 
     fn gausses_many(
@@ -212,6 +414,55 @@ where
                     })
             })?;
         Ok(result)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn generic_dmdt_gausses_batches(
+        &self,
+        lcs: Vec<(
+            GenericFloatArray1<'a>,
+            GenericFloatArray1<'a>,
+            GenericFloatArray1<'a>,
+        )>,
+        sorted: Option<bool>,
+        batch_size: usize,
+        yield_index: bool,
+        shuffle: bool,
+        drop_nobs: DropNObsType,
+        random_seed: Option<u64>,
+    ) -> Res<GenericDmDtBatches<T, Tmerr2Lc<T>>> {
+        let typed_lcs = lcs
+            .into_iter()
+            .enumerate()
+            .map(|(i, (t, m, sigma))| {
+                let t: Result<&'a PyArray1<T>, _> = t.try_into();
+                let m: Result<&'a PyArray1<T>, _> = m.try_into();
+                let sigma: Result<&'a PyArray1<T>, _> = sigma.try_into();
+                match (t, m, sigma) {
+                    (Ok(t), Ok(m), Ok(sigma)) => {
+                        let t = t.to_owned_array();
+                        check_sorted(t.as_slice().unwrap(), sorted)?;
+                        let m = m.to_owned_array();
+                        let err2 = Self::sigma_to_err2(sigma);
+                        Ok((t, m, err2))
+                    }
+                    _ => Err(Exception::TypeError(format!(
+                        "lcs[{}] elements have mismatched dtype with the lc[0][0] which is {}",
+                        i,
+                        std::any::type_name::<T>(),
+                    ))),
+                }
+            })
+            .collect::<Res<Vec<_>>>()?;
+        GenericDmDtBatches::new(
+            self.clone(),
+            typed_lcs,
+            batch_size,
+            yield_index,
+            shuffle,
+            drop_nobs,
+            random_seed,
+        )
     }
 
     fn gausses_from_columnar(
@@ -242,7 +493,14 @@ where
                     let m_lc = &m[first..last];
                     let err2_lc: Vec<_> = sigma[first..last].iter().map(|x| x.powi(2)).collect();
 
-                    let mut a = self.dmdt.gausses(t_lc, m_lc, &err2_lc, &self.error_func);
+                    let mut a = match self.error_func {
+                        ErrorFunction::Exact => {
+                            self.dmdt.gausses::<lcdmdt::ExactErf>(t_lc, m_lc, &err2_lc)
+                        }
+                        ErrorFunction::Eps1Over1e3 => self
+                            .dmdt
+                            .gausses::<lcdmdt::Eps1Over1e3Erf>(t_lc, m_lc, &err2_lc),
+                    };
                     self.normalize(&mut a, t_lc);
 
                     let (nrows, ncols) = (a.nrows(), a.ncols());
@@ -255,7 +513,10 @@ where
     }
 }
 
-struct GenericDmDtBatches<T, LC> {
+struct GenericDmDtBatches<T, LC>
+where
+    T: lcdmdt::Float,
+{
     dmdt: GenericDmDt<T>,
     lcs: Vec<LC>,
     batch_size: usize,
@@ -265,7 +526,10 @@ struct GenericDmDtBatches<T, LC> {
     rng: Mutex<Xoshiro256PlusPlus>,
 }
 
-impl<T, LC> GenericDmDtBatches<T, LC> {
+impl<T, LC> GenericDmDtBatches<T, LC>
+where
+    T: lcdmdt::Float,
+{
     fn new(
         dmdt: GenericDmDt<T>,
         lcs: Vec<LC>,
@@ -479,6 +743,9 @@ macro_rules! py_dmdt_batches {
     };
 }
 
+type TmLc<T> = (ndarray::Array1<T>, ndarray::Array1<T>);
+type Tmerr2Lc<T> = (ndarray::Array1<T>, ndarray::Array1<T>, ndarray::Array1<T>);
+
 py_dmdt_batches!(
     |dmdt_batches: Arc<GenericDmDtBatches<_, (ndarray::Array1<_>, ndarray::Array1<_>)>>, indexes: &[usize], rng: Option<Xoshiro256PlusPlus>| {
         let mut lcs: Vec<_> = indexes
@@ -486,8 +753,8 @@ py_dmdt_batches!(
             .map(|&i| {
                 let (t, m) = &dmdt_batches.lcs[i];
                 (
-                    t.as_slice_memory_order().unwrap(),
-                    m.as_slice_memory_order().unwrap(),
+                    t.as_slice().unwrap(),
+                    m.as_slice().unwrap(),
                 )
             })
             .collect();
@@ -508,11 +775,11 @@ py_dmdt_batches!(
         }
         dmdt_batches.dmdt.points_many(lcs, Some(true))
     },
-    GenericDmDtBatches<f32, (ndarray::Array1<f32>, ndarray::Array1<f32>)>,
+    GenericDmDtBatches<f32, TmLc<f32>>,
     DmDtPointsBatchesF32,
     DmDtPointsIterF32,
     f32,
-    GenericDmDtBatches<f64, (ndarray::Array1<f64>, ndarray::Array1<f64>)>,
+    GenericDmDtBatches<f64, TmLc<f64>>,
     DmDtPointsBatchesF64,
     DmDtPointsIterF64,
     f64,
@@ -525,9 +792,9 @@ py_dmdt_batches!(
             .map(|&i| {
                 let (t, m, err2) = &dmdt_batches.lcs[i];
                 (
-                    t.as_slice_memory_order().unwrap(),
-                    m.as_slice_memory_order().unwrap(),
-                    err2.as_slice_memory_order().unwrap(),
+                    t.as_slice().unwrap(),
+                    m.as_slice().unwrap(),
+                    err2.as_slice().unwrap(),
                 )
             })
             .collect();
@@ -548,46 +815,53 @@ py_dmdt_batches!(
         }
         dmdt_batches.dmdt.gausses_many(lcs, Some(true))
     },
-    GenericDmDtBatches<f32, (ndarray::Array1<f32>, ndarray::Array1<f32>, ndarray::Array1<f32>)>,
+    GenericDmDtBatches<f32, Tmerr2Lc<f32>>,
     DmDtGaussesBatchesF32,
     DmDtGaussesIterF32,
     f32,
-    GenericDmDtBatches<f64, (ndarray::Array1<f64>, ndarray::Array1<f64>, ndarray::Array1<f64>)>,
+    GenericDmDtBatches<f64, Tmerr2Lc<f64>>,
     DmDtGaussesBatchesF64,
     DmDtGaussesIterF64,
     f64,
 );
 
-/// dm-lg(dt) map producer
+/// dm-dt map producer
 ///
-/// Each pair of observations is mapped to dm-lg(dt) plane bringing unity
+/// THIS IS AN EXPERIMENTAL FEATURE
+/// INTERFACE COULD CHANGE WHEN PATCH VERSION IS CHANGED
+///
+/// Each pair of observations is mapped to dm-dt plane bringing unity
 /// value. dmdt-map is a rectangle on this plane consisted of
-/// `lgdt_size` x `dm_size` cells, and limited by `[min_lgdt; max_lgdt)` and
-/// `[-max_abs_dm; max_abs_dm)` intervals. `.points*()` methods assigns unity
+/// `dt_size` x `dm_size` cells, and limited by `[min_dt; max_dt)` and
+/// `[min_dm; max_dm)` intervals. `.points*()` methods assigns unity
 /// value of each observation to a single cell, while `.gausses*()` methods
-/// smears this unity value over all cells with given lg(t2 - t1) value using
+/// smears this unity value over all cells with given dt value using
 /// normal distribution `N(m2 - m1, sigma1^2 + sigma2^2)`, where
-/// `(t1, m1, sigma1)` and `(t2, m2, sigma2)` is a pair of observations
+/// `(t1, m1, sigma1)` and `(t2, m2, sigma2)` are a pair of observations
 /// including uncertainties. Optionally after the map is built, normalisation
-/// is performed ("norm" parameter): "lgdt" means divide each lg(dt) = const
+/// is performed ("norm" parameter): "dt" means divide each dt = const
 /// column by the total number of all observations corresponded to given dt;
 /// "max" means divide all values by the maximum value; both options can be
-/// combined, then "max" is performed after "lgdt".
+/// combined, then "max" is performed after "dt".
 ///
 /// Parameters
 /// ----------
-/// min_lgdt : float
-///     Left border of lg(dt) interval
-/// max_lgdt : float
-///     Right border of lg(dt) interval
-/// max_abs_dm : float
-///     Absolute values of dm interval borders
-/// lgdt_size : int
-///     Number of lg(dt) cells
-/// dm_size : int
-///     Number of dm cells
+/// dt : np.array of float64
+///     Ascending array of dt grid edges
+/// dm : np.array of float64
+///     Ascending array of dm grid edges
+/// dt_type : str, optional
+///     Type of `dt` grid, one of:
+///     - 'auto' (default) means check if grid is linear or logarithmic one,
+///       which allows some speed-up
+///     - 'linear' says to build a linear grid from the first and last values
+///       of `dt`, using the same number of edges
+///     - 'log' is the same as 'linear' but for building logarithmic grid
+///     - 'asis' means using the given array as a grid
+/// dm_type : str, optional
+///     Type of `dm` grid, see `dt_type` for details
 /// norm : list of str, opional
-///     Types of normalisation, cab be any combination of "lgdt" and "max",
+///     Types of normalisation, cab be any combination of "dt" and "max",
 ///     default is an empty list `[]` which means no normalisation
 /// n_jobs : int, optional
 ///     Number of parallel threads to run in bulk transformation methods such
@@ -601,25 +875,32 @@ py_dmdt_batches!(
 /// ----------
 /// n_jobs : int
 /// shape : (int, int)
-///     Shape of a single dmdt map, `(lgdt_size, dm_size)`
-/// min_lgdt : float
-/// max_lgdt : float
-/// max_abs_dm : float
+///     Shape of a single dmdt map, `(dt_size, dm_size)`
+/// dt_grid : np.array of float64
+/// min_dt : float
+/// max_dt : float
+/// dm_grid : np.array of float64
+/// min_dm : float
+/// max_dm : float
 ///
 /// Methods
 /// -------
+/// from_borders(min_lgdt, max_lgdt, max_abs_dm, lgdt_size, dm_size, **kwargs)
+///     Construct `DmDt` with logarithmic dt grid [10^min_lgdt, 10^max_lgdt)
+///     and linear dm grid [-max_abs_dm, max_abs_dm), `kwargs` are passed to
+///     `__new__()`
 /// points(t, m, sorted=None)
 ///     Produces dmdt-maps from light curve
 /// gausses(t, m, sigma, sorted=None)
 ///     Produces smeared dmdt-map from noisy light curve
-/// count_lgdt(t, sorted=None)
-///     Total number of observations per each lg(dt) interval
+/// count_dt(t, sorted=None)
+///     Total number of observations per each dt interval
 /// points_many(lcs, sorted=None)
 ///     Produces dmdt-maps from a list of light curves
 /// gausses_many(lcs, sorted=None)
 ///     Produces smeared dmdt-maps from a list of light curves
-/// count_lgdt_many(t_, sorted=None)
-///     Number of observations in each lg(dt) for a list of arrays
+/// count_dt_many(t_, sorted=None)
+///     Number of observations in each dt for a list of arrays
 /// points_batches(lcs, sorted=None, batch_size=1, yield_index=False, shuffle=False, drop_nobs=0, random_seed=None)
 ///     Gives a reusable iterable which yields dmdt-maps
 /// gausses_batches(lcs, sorted=None, batch_size=1, yield_index=False, shuffle=False, drop_nobs=0, random_seed=None)
@@ -635,52 +916,101 @@ pub struct DmDt {
     dmdt_f32: GenericDmDt<f32>,
 }
 
-#[pymethods]
+#[derive(Clone, Copy)]
+enum GridType {
+    Linear,
+    Log,
+    Generic,
+}
+
 impl DmDt {
-    #[allow(clippy::too_many_arguments)]
-    #[new]
-    #[args(
-    min_lgdt,
-    max_lgdt,
-    max_abs_dm,
-    lgdt_size,
-    dm_size,
-    norm = "vec![]",
-    n_jobs = -1,
-    approx_erf = "false"
-    )]
-    fn __new__(
-        min_lgdt: f64,
-        max_lgdt: f64,
-        max_abs_dm: f64,
-        lgdt_size: usize,
-        dm_size: usize,
+    // clippy has false-positive report for 1..-1 ranges inside s!
+    // https://github.com/rust-lang/rust-clippy/issues/5808
+    #[allow(clippy::reversed_empty_ranges)]
+    fn grid_type(a: &ndarray::ArrayView1<f64>) -> Res<GridType> {
+        const EPS: f64 = 1000.0 * f64::EPSILON;
+
+        if !ndarray::Zip::from(a.slice(ndarray::s![..-1]))
+            .and(a.slice(ndarray::s![1..]))
+            .all(|&x, &y| x < y)
+        {
+            return Err(Exception::ValueError(
+                "dmdt grid must be in ascending order".to_owned(),
+            ));
+        }
+
+        let a1 = *a
+            .get(1)
+            .ok_or_else(|| Exception::IndexError("index 1 is out of bounds".to_owned()))?;
+        let a0 = *a.get(0).unwrap();
+
+        {
+            let step = a1 - a0;
+            if ndarray::Zip::from(a.slice(ndarray::s![1..-1]))
+                .and(a.slice(ndarray::s![2..]))
+                .all(|&x, &y| f64::abs((step - y + x) / step) < EPS)
+            {
+                return Ok(GridType::Linear);
+            }
+        }
+        {
+            let ln_step = f64::ln(a1 / a0);
+            if ndarray::Zip::from(a.slice(ndarray::s![1..-1]))
+                .and(a.slice(ndarray::s![2..]))
+                .all(|&x, &y| f64::abs((ln_step - f64::ln(y / x)) / ln_step) < EPS)
+            {
+                return Ok(GridType::Log);
+            }
+        }
+        Ok(GridType::Generic)
+    }
+
+    fn array_to_grid<T>(
+        x: &ndarray::ArrayView1<f64>,
+        grid_type: GridType,
+    ) -> Res<Box<dyn lcdmdt::Grid<T>>>
+    where
+        T: lcdmdt::Float + ApproxFrom<f64>,
+    {
+        Ok(match grid_type {
+            GridType::Linear => Box::new(lcdmdt::LinearGrid::new(
+                (*x.get(0).unwrap()).approx().unwrap(),
+                (*x.get(x.len() - 1).unwrap()).approx().unwrap(),
+                x.len() - 1,
+            )),
+            GridType::Log => Box::new(lcdmdt::LgGrid::from_start_end(
+                (*x.get(0).unwrap()).approx().unwrap(),
+                (*x.get(x.len() - 1).unwrap()).approx().unwrap(),
+                x.len() - 1,
+            )),
+            GridType::Generic => Box::new(
+                lcdmdt::ArrayGrid::new(x.mapv(|x| x.approx().unwrap()))
+                    .map_err(|err| Exception::ValueError(err.to_string()))?,
+            ),
+        })
+    }
+
+    fn from_dmdts(
+        dmdt_f32: lcdmdt::DmDt<f32>,
+        dmdt_f64: lcdmdt::DmDt<f64>,
         norm: Vec<&str>,
         n_jobs: i64,
         approx_erf: bool,
     ) -> Res<Self> {
-        let dmdt_f32 = lcdmdt::DmDt {
-            lgdt_grid: lcdmdt::Grid::new(min_lgdt as f32, max_lgdt as f32, lgdt_size),
-            dm_grid: lcdmdt::Grid::new(-max_abs_dm as f32, max_abs_dm as f32, dm_size),
-        };
-        let dmdt_f64 = lcdmdt::DmDt {
-            lgdt_grid: lcdmdt::Grid::new(min_lgdt, max_lgdt, lgdt_size),
-            dm_grid: lcdmdt::Grid::new(-max_abs_dm, max_abs_dm, dm_size),
-        };
         let norm = norm
             .iter()
             .map(|&s| match s {
-                "lgdt" => Ok(NormFlag::LgDt),
+                "dt" => Ok(NormFlag::Dt),
                 "max" => Ok(NormFlag::Max),
                 _ => Err(Exception::ValueError(format!(
-                    "normalisation name {:?} is unknown, known names are: \"lgdt\", \"norm\"",
+                    "normalisation name {:?} is unknown, known names are: \"dt\", \"norm\"",
                     s
                 ))),
             })
             .collect::<Res<BitFlags<NormFlag>>>()?;
         let error_func = match approx_erf {
-            true => lcdmdt::ErrorFunction::Eps1Over1e3,
-            false => lcdmdt::ErrorFunction::Exact,
+            true => ErrorFunction::Eps1Over1e3,
+            false => ErrorFunction::Exact,
         };
         let n_jobs = if n_jobs <= 0 {
             num_cpus::get()
@@ -701,6 +1031,104 @@ impl DmDt {
                 n_jobs,
             },
         })
+    }
+}
+
+#[pymethods]
+impl DmDt {
+    #[allow(clippy::too_many_arguments)]
+    #[new]
+    #[args(
+        dt,
+        dm,
+        dt_type = "\"auto\"",
+        dm_type = "\"auto\"",
+        norm = "vec![]",
+        n_jobs = -1,
+        approx_erf = "false"
+    )]
+    fn __new__(
+        dt: &PyArray1<f64>,
+        dm: &PyArray1<f64>,
+        dm_type: &str,
+        dt_type: &str,
+        norm: Vec<&str>,
+        n_jobs: i64,
+        approx_erf: bool,
+    ) -> Res<Self> {
+        let dt = dt.readonly();
+        let dt = dt.as_array();
+        let dm = dm.readonly();
+        let dm = dm.as_array();
+
+        let grid_type_dt = match dt_type {
+            "auto" => Self::grid_type(&dt)?,
+            "linear" => GridType::Linear,
+            "log" => GridType::Log,
+            "asis" => GridType::Generic,
+            _ => {
+                return Err(Exception::ValueError(
+                    "dt_type must be 'auto', 'linear', 'log' or 'asis'".to_owned(),
+                ))
+            }
+        };
+        let grid_type_dm = match dm_type {
+            "auto" => Self::grid_type(&dm)?,
+            "linear" => GridType::Linear,
+            "log" => GridType::Log,
+            "asis" => GridType::Generic,
+            _ => {
+                return Err(Exception::ValueError(
+                    "dm_type must be 'auto', 'linear', 'log' or 'asis'".to_owned(),
+                ))
+            }
+        };
+
+        let dmdt_f32: lcdmdt::DmDt<f32> = lcdmdt::DmDt {
+            dt_grid: Self::array_to_grid(&dt, grid_type_dt)?,
+            dm_grid: Self::array_to_grid(&dm, grid_type_dm)?,
+        };
+        let dmdt_f64: lcdmdt::DmDt<f64> = lcdmdt::DmDt {
+            dt_grid: Self::array_to_grid(&dt, grid_type_dt)?,
+            dm_grid: Self::array_to_grid(&dm, grid_type_dm)?,
+        };
+
+        Self::from_dmdts(dmdt_f32, dmdt_f64, norm, n_jobs, approx_erf)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    #[staticmethod]
+    #[args(
+        min_lgdt,
+        max_lgdt,
+        max_abs_dm,
+        lgdt_size,
+        dm_size,
+        norm = "vec![]",
+        n_jobs = -1,
+        approx_erf = "false"
+    )]
+    fn from_borders(
+        min_lgdt: f64,
+        max_lgdt: f64,
+        max_abs_dm: f64,
+        lgdt_size: usize,
+        dm_size: usize,
+        norm: Vec<&str>,
+        n_jobs: i64,
+        approx_erf: bool,
+    ) -> Res<Self> {
+        let dmdt_f32 = lcdmdt::DmDt::from_lgdt_dm_limits(
+            min_lgdt as f32,
+            max_lgdt as f32,
+            lgdt_size,
+            max_abs_dm as f32,
+            dm_size,
+        );
+        let dmdt_f64 =
+            lcdmdt::DmDt::from_lgdt_dm_limits(min_lgdt, max_lgdt, lgdt_size, max_abs_dm, dm_size);
+
+        Self::from_dmdts(dmdt_f32, dmdt_f64, norm, n_jobs, approx_erf)
     }
 
     #[getter]
@@ -723,17 +1151,27 @@ impl DmDt {
 
     #[getter]
     fn shape(&self) -> (usize, usize) {
-        self.dmdt_f32.dmdt.shape()
+        self.dmdt_f64.dmdt.shape()
     }
 
     #[getter]
-    fn min_lgdt(&self) -> f64 {
-        self.dmdt_f64.dmdt.lgdt_grid.get_start()
+    fn dt_grid<'py>(&self, py: Python<'py>) -> &'py PyArray1<f64> {
+        self.dmdt_f64.dmdt.dt_grid.get_borders().to_pyarray(py)
     }
 
     #[getter]
-    fn max_lgdt(&self) -> f64 {
-        self.dmdt_f64.dmdt.lgdt_grid.get_end()
+    fn min_dt(&self) -> f64 {
+        self.dmdt_f64.dmdt.dt_grid.get_start()
+    }
+
+    #[getter]
+    fn max_dt(&self) -> f64 {
+        self.dmdt_f64.dmdt.dt_grid.get_end()
+    }
+
+    #[getter]
+    fn dm_grid<'py>(&self, py: Python<'py>) -> &'py PyArray1<f64> {
+        self.dmdt_f64.dmdt.dm_grid.get_borders().to_pyarray(py)
     }
 
     #[getter]
@@ -746,16 +1184,10 @@ impl DmDt {
         self.dmdt_f64.dmdt.dm_grid.get_end()
     }
 
-    #[getter]
-    fn max_abs_dm(&self) -> f64 {
-        self.dmdt_f64.dmdt.dm_grid.get_end()
-    }
-
-    /// Total number of observations per each lg(dt) interval
+    /// Total number of observations per each dt interval
     ///
     /// Output takes into account all observation pairs within
-    /// [min_lgdt; max_lgdt), even if they are not in
-    /// [-max_abs_dm; max_abs_dm)
+    /// [min_dt; max_dt), even if they are not in [min_dm; max_dm)
     ///
     /// Parameters
     /// ----------
@@ -768,28 +1200,21 @@ impl DmDt {
     /// 1d-array of float
     ///
     #[args(t, sorted = "None")]
-    fn count_lgdt(&self, py: Python, t: GenericFloatArray1, sorted: Option<bool>) -> Res<PyObject> {
+    fn count_dt(&self, py: Python, t: GenericFloatArray1, sorted: Option<bool>) -> Res<PyObject> {
         match t {
-            GenericFloatArray1::Float32(t) => self
-                .dmdt_f32
-                .count_lgdt(&ArrWrapper::new(t, true), sorted)
-                .map(|a| a.into_pyarray(py).into_py(py)),
-            GenericFloatArray1::Float64(t) => self
-                .dmdt_f64
-                .count_lgdt(&ArrWrapper::new(t, true), sorted)
-                .map(|a| a.into_pyarray(py).into_py(py)),
+            GenericFloatArray1::Float32(t) => self.dmdt_f32.py_count_dt(py, t, sorted),
+            GenericFloatArray1::Float64(t) => self.dmdt_f64.py_count_dt(py, t, sorted),
         }
     }
 
-    /// Total number of observations per each lg(dt) interval
+    /// Total number of observations per each dt interval
     ///
     /// Output takes into account all observation pairs within
-    /// [min_lgdt; max_lgdt), even if they are not in
-    /// [-max_abs_dm; max_abs_dm)
+    /// [min_dt; max_dt), even if they are not in [min_dm; max_dm)
     ///
     /// Parameters
     /// ----------
-    /// t_ : 1d-ndarray of float
+    /// t_ : list of 1d-ndarray of float
     ///     List of arrays, each represents time moments, must be sorted
     /// sorted : bool or None, optional
     ///     `True` guarantees that `t` is sorted
@@ -798,7 +1223,7 @@ impl DmDt {
     /// 1d-array of float
     ///
     #[args(t_, sorted = "None")]
-    fn count_lgdt_many(
+    fn count_dt_many(
         &self,
         py: Python,
         t_: Vec<GenericFloatArray1>,
@@ -808,44 +1233,8 @@ impl DmDt {
             Err(Exception::ValueError("t_ is empty".to_owned()))
         } else {
             match t_[0] {
-                GenericFloatArray1::Float32(_) => {
-                    let wrapped_t_ = t_
-                        .iter()
-                        .enumerate()
-                        .map(|(i, t)| match t {
-                            GenericFloatArray1::Float32(t) => Ok(ArrWrapper::new(t, true)),
-                            _ => Err(Exception::TypeError(format!(
-                                "t_[{}] has mismatched dtype with the t_[0] which is float32",
-                                i
-                            ))),
-                        })
-                        .collect::<Res<Vec<_>>>()?;
-                    let typed_t_ = wrapped_t_.iter().map(|t| &t[..]).collect();
-                    Ok(self
-                        .dmdt_f32
-                        .count_lgdt_many(typed_t_, sorted)?
-                        .into_pyarray(py)
-                        .into_py(py))
-                }
-                GenericFloatArray1::Float64(_) => {
-                    let wrapped_t_ = t_
-                        .iter()
-                        .enumerate()
-                        .map(|(i, t)| match t {
-                            GenericFloatArray1::Float64(t) => Ok(ArrWrapper::new(t, true)),
-                            _ => Err(Exception::TypeError(format!(
-                                "t_[{}] has mismatched dtype with the t_[0] which is float64",
-                                i
-                            ))),
-                        })
-                        .collect::<Res<Vec<_>>>()?;
-                    let typed_t_ = wrapped_t_.iter().map(|t| &t[..]).collect();
-                    Ok(self
-                        .dmdt_f64
-                        .count_lgdt_many(typed_t_, sorted)?
-                        .into_pyarray(py)
-                        .into_py(py))
-                }
+                GenericFloatArray1::Float32(_) => self.dmdt_f32.py_count_dt_many(py, t_, sorted),
+                GenericFloatArray1::Float64(_) => self.dmdt_f64.py_count_dt_many(py, t_, sorted),
             }
         }
     }
@@ -874,16 +1263,12 @@ impl DmDt {
         sorted: Option<bool>,
     ) -> Res<PyObject> {
         match (t, m) {
-            (GenericFloatArray1::Float32(t), GenericFloatArray1::Float32(m)) => Ok(self
-                .dmdt_f32
-                .points(&ArrWrapper::new(t, true), &ArrWrapper::new(m, true), sorted)?
-                .into_pyarray(py)
-                .into_py(py)),
-            (GenericFloatArray1::Float64(t), GenericFloatArray1::Float64(m)) => Ok(self
-                .dmdt_f64
-                .points(&ArrWrapper::new(t, true), &ArrWrapper::new(m, true), sorted)?
-                .into_pyarray(py)
-                .into_py(py)),
+            (GenericFloatArray1::Float32(t), GenericFloatArray1::Float32(m)) => {
+                self.dmdt_f32.py_points(py, t, m, sorted)
+            }
+            (GenericFloatArray1::Float64(t), GenericFloatArray1::Float64(m)) => {
+                self.dmdt_f64.py_points(py, t, m, sorted)
+            }
             _ => Err(Exception::TypeError(
                 "t and m must have the same dtype".to_owned(),
             )),
@@ -917,30 +1302,8 @@ impl DmDt {
             Err(Exception::ValueError("lcs is empty".to_owned()))
         } else {
             match lcs[0].0 {
-                GenericFloatArray1::Float32(_) => {
-                    let wrapped_lcs = lcs.iter().enumerate().map(|(i, lc)| match lc {
-                        (GenericFloatArray1::Float32(t), GenericFloatArray1::Float32(m)) => Ok((ArrWrapper::new(t, true), ArrWrapper::new(m, true))),
-                        _ => Err(Exception::TypeError(format!("lcs[{}] elements have mismatched dtype with the lc[0][0] which is float32", i))),
-                    }).collect::<Res<Vec<_>>>()?;
-                    let typed_lcs = wrapped_lcs.iter().map(|(t, m)| (&t[..], &m[..])).collect();
-                    Ok(self
-                        .dmdt_f32
-                        .points_many(typed_lcs, sorted)?
-                        .into_pyarray(py)
-                        .into_py(py))
-                }
-                GenericFloatArray1::Float64(_) => {
-                    let wrapped_lcs = lcs.iter().enumerate().map(|(i, lc)| match lc {
-                        (GenericFloatArray1::Float64(t), GenericFloatArray1::Float64(m)) => Ok((ArrWrapper::new(t, true), ArrWrapper::new(m, true))),
-                        _ => Err(Exception::TypeError(format!("lcs[{}] elements have mismatched dtype with the lc[0][0] which is float64", i))),
-                    }).collect::<Res<Vec<_>>>()?;
-                    let typed_lcs = wrapped_lcs.iter().map(|(t, m)| (&t[..], &m[..])).collect();
-                    Ok(self
-                        .dmdt_f64
-                        .points_many(typed_lcs, sorted)?
-                        .into_pyarray(py)
-                        .into_py(py))
-                }
+                GenericFloatArray1::Float32(_) => self.dmdt_f32.py_points_many(py, lcs, sorted),
+                GenericFloatArray1::Float64(_) => self.dmdt_f64.py_points_many(py, lcs, sorted),
             }
         }
     }
@@ -1007,54 +1370,32 @@ impl DmDt {
         if lcs.is_empty() {
             Err(Exception::ValueError("lcs is empty".to_owned()))
         } else {
-            match lcs[0].0 {
-                GenericFloatArray1::Float32(_) => {
-                    let typed_lcs = lcs.iter().enumerate().map(|(i, lc)| match lc {
-                        (GenericFloatArray1::Float32(t), GenericFloatArray1::Float32(m)) => {
-                            let t = t.to_owned_array();
-                            check_sorted(t.as_slice().unwrap(), sorted)?;
-                            let m = m.to_owned_array();
-                            Ok((t, m))
-                        },
-                        _ => Err(Exception::TypeError(format!("lcs[{}] elements have mismatched dtype with the lc[0][0] which is float32", i))),
-                    }).collect::<Res<Vec<_>>>()?;
-                    Ok(DmDtPointsBatchesF32 {
-                        dmdt_batches: Arc::new(GenericDmDtBatches::new(
-                            self.dmdt_f32.clone(),
-                            typed_lcs,
-                            batch_size,
-                            yield_index,
-                            shuffle,
-                            drop_nobs,
-                            random_seed,
-                        )?),
-                    }
-                    .into_py(py))
+            Ok(match lcs[0].0 {
+                GenericFloatArray1::Float32(_) => DmDtPointsBatchesF32 {
+                    dmdt_batches: Arc::new(self.dmdt_f32.generic_dmdt_points_batches(
+                        lcs,
+                        sorted,
+                        batch_size,
+                        yield_index,
+                        shuffle,
+                        drop_nobs,
+                        random_seed,
+                    )?),
                 }
-                GenericFloatArray1::Float64(_) => {
-                    let typed_lcs = lcs.iter().enumerate().map(|(i, lc)| match lc {
-                        (GenericFloatArray1::Float64(t), GenericFloatArray1::Float64(m)) => {
-                            let t = t.to_owned_array();
-                            check_sorted(t.as_slice().unwrap(), sorted)?;
-                            let m = m.to_owned_array();
-                            Ok((t, m))
-                        },
-                        _ => Err(Exception::TypeError(format!("lcs[{}] elements have mismatched dtype with the lc[0][0] which is float64", i))),
-                    }).collect::<Res<Vec<_>>>()?;
-                    Ok(DmDtPointsBatchesF64 {
-                        dmdt_batches: Arc::new(GenericDmDtBatches::new(
-                            self.dmdt_f64.clone(),
-                            typed_lcs,
-                            batch_size,
-                            yield_index,
-                            shuffle,
-                            drop_nobs,
-                            random_seed,
-                        )?),
-                    }
-                    .into_py(py))
+                .into_py(py),
+                GenericFloatArray1::Float64(_) => DmDtPointsBatchesF64 {
+                    dmdt_batches: Arc::new(self.dmdt_f64.generic_dmdt_points_batches(
+                        lcs,
+                        sorted,
+                        batch_size,
+                        yield_index,
+                        shuffle,
+                        drop_nobs,
+                        random_seed,
+                    )?),
                 }
-            }
+                .into_py(py),
+            })
         }
     }
 
@@ -1137,37 +1478,13 @@ impl DmDt {
                 GenericFloatArray1::Float32(t),
                 GenericFloatArray1::Float32(m),
                 GenericFloatArray1::Float32(sigma),
-            ) => {
-                let err2 = GenericDmDt::sigma_to_err2(sigma);
-                Ok(self
-                    .dmdt_f32
-                    .gausses(
-                        &ArrWrapper::new(t, true),
-                        &ArrWrapper::new(m, true),
-                        err2.as_slice_memory_order().unwrap(),
-                        sorted,
-                    )?
-                    .into_pyarray(py)
-                    .into_py(py))
-            }
+            ) => self.dmdt_f32.py_gausses(py, t, m, sigma, sorted),
             (
                 GenericFloatArray1::Float64(t),
                 GenericFloatArray1::Float64(m),
                 GenericFloatArray1::Float64(sigma),
-            ) => {
-                let err2 = GenericDmDt::sigma_to_err2(sigma);
-                Ok(self
-                    .dmdt_f64
-                    .gausses(
-                        &ArrWrapper::new(t, true),
-                        &ArrWrapper::new(m, true),
-                        err2.as_slice_memory_order().unwrap(),
-                        sorted,
-                    )?
-                    .into_pyarray(py)
-                    .into_py(py))
-            }
-            _ => Err(Exception::ValueError(
+            ) => self.dmdt_f64.py_gausses(py, t, m, sigma, sorted),
+            _ => Err(Exception::TypeError(
                 "t, m and sigma must have the same dtype".to_owned(),
             )),
         }
@@ -1200,36 +1517,8 @@ impl DmDt {
             Err(Exception::ValueError("lcs is empty".to_owned()))
         } else {
             match lcs[0].0 {
-                GenericFloatArray1::Float32(_) => {
-                    let wrapped_lcs = lcs.iter().enumerate().map(|(i, lc)| match lc {
-                        (GenericFloatArray1::Float32(t), GenericFloatArray1::Float32(m), GenericFloatArray1::Float32(sigma)) => Ok((ArrWrapper::new(t, true), ArrWrapper::new(m, true), GenericDmDt::sigma_to_err2(sigma))),
-                        _ => Err(Exception::TypeError(format!("lcs[{}] elements have mismatched dtype with the lc[0][0] which is float32", i))),
-                    }).collect::<Res<Vec<_>>>()?;
-                    let typed_lcs = wrapped_lcs
-                        .iter()
-                        .map(|(t, m, err2)| (&t[..], &m[..], err2.as_slice_memory_order().unwrap()))
-                        .collect();
-                    Ok(self
-                        .dmdt_f32
-                        .gausses_many(typed_lcs, sorted)?
-                        .into_pyarray(py)
-                        .into_py(py))
-                }
-                GenericFloatArray1::Float64(_) => {
-                    let wrapped_lcs = lcs.iter().enumerate().map(|(i, lc)| match lc {
-                        (GenericFloatArray1::Float64(t), GenericFloatArray1::Float64(m), GenericFloatArray1::Float64(sigma)) => Ok((ArrWrapper::new(t, true), ArrWrapper::new(m, true), GenericDmDt::sigma_to_err2(sigma))),
-                        _ => Err(Exception::TypeError(format!("lcs[{}] elements have mismatched dtype with the lc[0][0] which is float32", i))),
-                    }).collect::<Res<Vec<_>>>()?;
-                    let typed_lcs = wrapped_lcs
-                        .iter()
-                        .map(|(t, m, err2)| (&t[..], &m[..], err2.as_slice_memory_order().unwrap()))
-                        .collect();
-                    Ok(self
-                        .dmdt_f64
-                        .gausses_many(typed_lcs, sorted)?
-                        .into_pyarray(py)
-                        .into_py(py))
-                }
+                GenericFloatArray1::Float32(_) => self.dmdt_f32.py_gausses_many(py, lcs, sorted),
+                GenericFloatArray1::Float64(_) => self.dmdt_f64.py_gausses_many(py, lcs, sorted),
             }
         }
     }
@@ -1293,54 +1582,30 @@ impl DmDt {
             Err(Exception::ValueError("lcs is empty".to_owned()))
         } else {
             match lcs[0].0 {
-                GenericFloatArray1::Float32(_) => {
-                    let typed_lcs = lcs.iter().enumerate().map(|(i, lc)| match lc {
-                        (GenericFloatArray1::Float32(t), GenericFloatArray1::Float32(m), GenericFloatArray1::Float32(sigma)) => {
-                            let t = t.to_owned_array();
-                            check_sorted(t.as_slice().unwrap(), sorted)?;
-                            let m = m.to_owned_array();
-                            let err2 = GenericDmDt::sigma_to_err2(sigma);
-                            Ok((t, m, err2))
-                        },
-                        _ => Err(Exception::TypeError(format!("lcs[{}] elements have mismatched dtype with the lc[0][0] which is float32", i))),
-                    }).collect::<Res<Vec<_>>>()?;
-                    Ok(DmDtGaussesBatchesF32 {
-                        dmdt_batches: Arc::new(GenericDmDtBatches::new(
-                            self.dmdt_f32.clone(),
-                            typed_lcs,
-                            batch_size,
-                            yield_index,
-                            shuffle,
-                            drop_nobs,
-                            random_seed,
-                        )?),
-                    }
-                    .into_py(py))
+                GenericFloatArray1::Float32(_) => Ok(DmDtGaussesBatchesF32 {
+                    dmdt_batches: Arc::new(self.dmdt_f32.generic_dmdt_gausses_batches(
+                        lcs,
+                        sorted,
+                        batch_size,
+                        yield_index,
+                        shuffle,
+                        drop_nobs,
+                        random_seed,
+                    )?),
                 }
-                GenericFloatArray1::Float64(_) => {
-                    let typed_lcs = lcs.iter().enumerate().map(|(i, lc)| match lc {
-                        (GenericFloatArray1::Float64(t), GenericFloatArray1::Float64(m), GenericFloatArray1::Float64(sigma)) => {
-                            let t = t.to_owned_array();
-                            check_sorted(t.as_slice().unwrap(), sorted)?;
-                            let m = m.to_owned_array();
-                            let err2 = GenericDmDt::sigma_to_err2(sigma);
-                            Ok((t, m, err2))
-                        },
-                        _ => Err(Exception::TypeError(format!("lcs[{}] elements have mismatched dtype with the lc[0][0] which is float64", i))),
-                    }).collect::<Res<Vec<_>>>()?;
-                    Ok(DmDtGaussesBatchesF64 {
-                        dmdt_batches: Arc::new(GenericDmDtBatches::new(
-                            self.dmdt_f64.clone(),
-                            typed_lcs,
-                            batch_size,
-                            yield_index,
-                            shuffle,
-                            drop_nobs,
-                            random_seed,
-                        )?),
-                    }
-                    .into_py(py))
+                .into_py(py)),
+                GenericFloatArray1::Float64(_) => Ok(DmDtGaussesBatchesF64 {
+                    dmdt_batches: Arc::new(self.dmdt_f64.generic_dmdt_gausses_batches(
+                        lcs,
+                        sorted,
+                        batch_size,
+                        yield_index,
+                        shuffle,
+                        drop_nobs,
+                        random_seed,
+                    )?),
                 }
+                .into_py(py)),
             }
         }
     }

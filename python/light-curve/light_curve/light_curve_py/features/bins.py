@@ -2,7 +2,7 @@ import numpy as np
 from scipy import ndimage
 from dataclasses import dataclass
 
-from ._base import BaseMetaFeature
+from ._base_meta import BaseMetaFeature
 
 
 @dataclass()

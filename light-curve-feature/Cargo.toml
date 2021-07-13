@@ -22,7 +22,7 @@ conv = "^0.3.3"
 dyn-clonable = "^0.9.0"
 fftw = { version = "0.7.0", default-features = false }
 GSL = { version = "~4.0.0", default-features = false, optional = true }
-hyperdual = { version = "~0.3.6", optional = true }
+hyperdual = { version = "~0.4.1", optional = true }
 itertools = "^0.10.0"
 lazy_static = "^1.4.0"
 libm = "~0.2.1"

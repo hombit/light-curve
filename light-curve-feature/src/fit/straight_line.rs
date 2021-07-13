@@ -25,20 +25,20 @@ pub fn fit_straight_line<T: Float>(
         }
         (n, sx, sy)
     };
-    let (stt, sty) = if known_errors & ts.w.is_some() {
+    let (stt, sty) = {
         let (mut stt, mut sty) = (T::zero(), T::zero());
-        for (x, y, w) in ts.tmw_iter() {
-            let t = x - sx / s;
-            stt += w * t.powi(2);
-            sty += w * t * y;
-        }
-        (stt, sty)
-    } else {
-        let (mut stt, mut sty) = (T::zero(), T::zero());
-        for (x, y) in ts.tm_iter() {
-            let t = x - sx / s;
-            stt += t.powi(2);
-            sty += t * y;
+        if known_errors & ts.w.is_some() {
+            for (x, y, w) in ts.tmw_iter() {
+                let t = x - sx / s;
+                stt += w * t.powi(2);
+                sty += w * t * y;
+            }
+        } else {
+            for (x, y) in ts.tm_iter() {
+                let t = x - sx / s;
+                stt += t.powi(2);
+                sty += t * y;
+            }
         }
         (stt, sty)
     };

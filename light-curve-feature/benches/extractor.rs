@@ -9,56 +9,64 @@ where
     T: Float + 'static,
     StandardNormal: Distribution<T>,
 {
-    const N: [usize; 3] = [10, 100, 1000];
+    const N: [usize; 2] = [100, 1000];
 
-    let fe_without_periodogram = feat_extr!(
-        Amplitude::default(),
-        AndersonDarlingNormal::default(),
-        BeyondNStd::default(),
-        Cusum::default(),
-        Eta::default(),
-        EtaE::default(),
-        InterPercentileRange::default(),
-        Kurtosis::default(),
-        LinearTrend::default(),
-        LinearFit::default(),
-        MaximumSlope::default(),
-        ReducedChi2::default(),
-        Skew::default(),
-        StandardDeviation::default(),
-        StetsonK::default(),
-        WeightedMean::default(),
-    );
-    let mut periodogram = Periodogram::new(5);
-    periodogram.set_max_freq_factor(2.0);
-    let fe_periodogram = feat_extr!(
-        Amplitude::default(),
-        AndersonDarlingNormal::default(),
-        BeyondNStd::default(),
-        Cusum::default(),
-        Eta::default(),
-        EtaE::default(),
-        InterPercentileRange::default(),
-        Kurtosis::default(),
-        LinearTrend::default(),
-        LinearFit::default(),
-        MaximumSlope::default(),
-        periodogram,
-        ReducedChi2::default(),
-        Skew::default(),
-        StandardDeviation::default(),
-        StetsonK::default(),
-        WeightedMean::default(),
-    );
+    let features: Vec<Box<dyn FeatureEvaluator<_>>> = vec![
+        Box::new(Amplitude::default()),
+        Box::new(AndersonDarlingNormal::default()),
+        Box::new(BeyondNStd::default()),
+        Box::new(Cusum::default()),
+        Box::new(Eta::default()),
+        Box::new(EtaE::default()),
+        Box::new(ExcessVariance::default()),
+        Box::new(InterPercentileRange::default()),
+        Box::new(Kurtosis::default()),
+        Box::new(LinearFit::default()),
+        Box::new(LinearTrend::default()),
+        Box::new(MagnitudePercentageRatio::default()),
+        Box::new(MaximumSlope::default()),
+        Box::new(Mean::default()),
+        Box::new(MeanVariance::default()),
+        Box::new(Median::default()),
+        Box::new(MedianAbsoluteDeviation::default()),
+        Box::new(MedianBufferRangePercentage::default()),
+        Box::new(PercentAmplitude::default()),
+        Box::new(PercentDifferenceMagnitudePercentile::default()),
+        Box::new(ReducedChi2::default()),
+        Box::new(Skew::default()),
+        Box::new(StandardDeviation::default()),
+        Box::new(StetsonK::default()),
+        Box::new(WeightedMean::default()),
+    ];
+
+    let mut bins = Bins::default();
+    bins.add_feature(Box::new(StetsonK::default()));
+
+    let mut periodogram = Periodogram::default();
+    periodogram.set_max_freq_factor(10.0);
+
+    let names_fes: Vec<_> = features
+        .iter()
+        .map(|f| (f.get_names()[0], FeatureExtractor::new(vec![f.clone()])))
+        .chain(std::iter::once((
+            "all non-meta features",
+            FeatureExtractor::new(features.clone()),
+        )))
+        .chain(std::iter::once((
+            "Bins",
+            FeatureExtractor::new(vec![Box::new(bins)]),
+        )))
+        .chain(std::iter::once((
+            "Periodogram",
+            FeatureExtractor::new(vec![Box::new(periodogram)]),
+        )))
+        .collect();
 
     for &n in N.iter() {
         let x = randspace(n);
         let y = randvec(n);
         let err = randvec(n);
-        for (&fe, &name) in [&fe_without_periodogram, &fe_periodogram]
-            .iter()
-            .zip(["w/o Periodogram", "w/ Periodogram"].iter())
-        {
+        for (name, fe) in names_fes.iter() {
             c.bench_function(
                 format!("FeatureExtractor {}: [{}; {}]", name, n, type_name::<T>()).as_str(),
                 |b| {

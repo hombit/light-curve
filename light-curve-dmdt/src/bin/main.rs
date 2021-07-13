@@ -1,6 +1,6 @@
 use clap::{value_t, App, Arg, ArgMatches};
 use enumflags2::{bitflags, BitFlags};
-use light_curve_dmdt::{to_png, DmDt, ErrorFunction, Grid};
+use light_curve_dmdt::{to_png, DmDt, Eps1Over1e3Erf, ExactErf};
 use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::PathBuf;
@@ -21,17 +21,19 @@ fn main() -> Result<(), MainError> {
 
     let (t, m, err2) = read_input(&config.input, config.smearing)?;
 
-    let dmdt = DmDt {
-        lgdt_grid: Grid::new(config.min_lgdt, config.max_lgdt, config.n_dt),
-        dm_grid: Grid::new(-config.max_abs_dm, config.max_abs_dm, config.n_dm),
-    };
+    let dmdt = DmDt::from_lgdt_dm_limits(
+        config.min_lgdt,
+        config.max_lgdt,
+        config.n_dt,
+        config.max_abs_dm,
+        config.n_dm,
+    );
 
     let map_float_or_u8 = if config.smearing {
-        let error_func = match config.approx_smearing {
-            true => ErrorFunction::Eps1Over1e3,
-            false => ErrorFunction::Exact,
+        let map_float = match config.approx_smearing {
+            true => dmdt.gausses::<Eps1Over1e3Erf>(&t, &m, &err2.unwrap()),
+            false => dmdt.gausses::<ExactErf>(&t, &m, &err2.unwrap()),
         };
-        let map_float = dmdt.gausses(&t, &m, &err2.unwrap(), &error_func);
         Array2FloatOrU8::Float(map_float)
     } else {
         let map_usize = dmdt.points(&t, &m);
@@ -45,7 +47,7 @@ fn main() -> Result<(), MainError> {
         Array2FloatOrU8::U8(map_u8) => map_u8,
         Array2FloatOrU8::Float(mut map_float) => {
             if config.norm.contains(DmDtNorm::LgDt) {
-                let lgdt = dmdt.lgdt_points(&t);
+                let lgdt = dmdt.dt_points(&t);
                 let lgdt_no_zeros = lgdt.mapv(|x| if x == 0 { 1.0 } else { x as f32 });
                 map_float /= &lgdt_no_zeros.into_shape((map_float.nrows(), 1)).unwrap();
             }

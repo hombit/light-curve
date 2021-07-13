@@ -1,51 +1,53 @@
 use crate::float_trait::Float;
 use conv::*;
+use std::fmt::Debug;
 
-#[derive(Copy, Clone, std::fmt::Debug)]
-pub enum ErrorFunction {
-    Exact,
-    Eps1Over1e3,
-}
+pub trait ErrorFunction<T>: Clone + Debug
+where
+    T: ErfFloat,
+{
+    fn erf(x: T) -> T;
 
-impl Default for ErrorFunction {
-    fn default() -> Self {
-        Self::Exact
+    fn normal_cdf(x: T, mean: T, sigma: T) -> T {
+        T::half() * (T::one() + Self::erf((x - mean) / sigma * T::FRAC_1_SQRT_2()))
+    }
+
+    fn max_dx_nonunity_normal_cdf(sigma: T) -> T;
+
+    fn min_dx_nonzero_normal_cdf(sigma: T) -> T {
+        -Self::max_dx_nonunity_normal_cdf(sigma)
     }
 }
 
-impl ErrorFunction {
-    pub fn erf<T>(&self, x: T) -> T
-    where
-        T: ErfFloat,
-    {
-        match self {
-            Self::Exact => x.libm_erf(),
-            Self::Eps1Over1e3 => x.erf_eps_1over1e3(),
-        }
+#[derive(Copy, Clone, Debug)]
+pub struct ExactErf;
+
+impl<T> ErrorFunction<T> for ExactErf
+where
+    T: ErfFloat,
+{
+    fn erf(x: T) -> T {
+        x.libm_erf()
     }
 
-    pub fn normal_cdf<T>(&self, x: T, mean: T, sigma: T) -> T
-    where
-        T: ErfFloat,
-    {
-        T::half() * (T::one() + self.erf((x - mean) / sigma * T::FRAC_1_SQRT_2()))
+    fn max_dx_nonunity_normal_cdf(sigma: T) -> T {
+        T::SQRT_2_ERFINV_UNITY_MINUS_EPS * sigma
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct Eps1Over1e3Erf;
+
+impl<T> ErrorFunction<T> for Eps1Over1e3Erf
+where
+    T: ErfFloat,
+{
+    fn erf(x: T) -> T {
+        x.erf_eps_1over1e3()
     }
 
-    pub fn max_dx_nonunity_normal_cdf<T>(&self, sigma: T) -> T
-    where
-        T: ErfFloat,
-    {
-        match self {
-            Self::Exact => T::SQRT_2_ERFINV_UNITY_MINUS_EPS * sigma,
-            Self::Eps1Over1e3 => T::SQRT_2_MAX_X_FOR_ERF_EPS_1OVER1E3 * sigma,
-        }
-    }
-
-    pub fn min_dx_nonzero_normal_cdf<T>(&self, sigma: T) -> T
-    where
-        T: ErfFloat,
-    {
-        -self.max_dx_nonunity_normal_cdf(sigma)
+    fn max_dx_nonunity_normal_cdf(sigma: T) -> T {
+        T::SQRT_2_MAX_X_FOR_ERF_EPS_1OVER1E3 * sigma
     }
 }
 
